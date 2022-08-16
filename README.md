@@ -5,15 +5,12 @@ as much as possible over the duration of the course.
 Author: Matt Young (m.young2@uqconnect.edu.au)
 
 ## Ant behaviour and game rules
-- The user provides a PNG bitmap that specifies the locations of food (green), empty tiles (black) and ant
-colonies (any other colour)
+- The user provides a PNG bitmap that specifies the locations of food (green), empty tiles (black), obstacles (grey), 
+and ant colonies (any other colour)
 - Each ant colony starts with a fixed number of ants
-/* - Each ant colony has a hunger timer that depletes by a fixed amount per game tick. In order to produce
+- Each ant colony has a hunger timer that depletes by a fixed amount per game tick. In order to produce
 more ants, the colony hunger meter must be full, in which case it can produce one ant every fixed number
-of ticks. */
-- Each ant individual has a unique hunger meter. Ants can go and get food, and come back to the colony.
-Once they do this, they can replenish their hunger meter. If they are no longer hungry, they can produce
-one more ant. If every ant from a colony dies, the colony is disqualified.
+of ticks. If the colony hunger meter becomes empty, then the colony is disqualified.
 - When an ant walks, it leaves a pheromone trail. If an ant has food, the pheromone trail is stronger.
 - Pheromone trails decay by a fixed amount per tick over time if they are not used.
 - Ants follow the strongest pheromone trail to get places. If they are in a certain range of a food tile, they walk
@@ -31,7 +28,8 @@ to the food directly. If none of these conditions are available, the ants wander
 ## Attribution
 The following open source libraries are used:
 
-- [lodepng](https://github.com/lvandeve/lodepng): zlib licence
+- [lodepng](https://github.com/lvandeve/lodepng), a PNG loading library: zlib licence
+- [mINI](https://github.com/pulzed/mINI), an INI config parsing library: MIT licence
 
 ## Licence
 Currently proprietary until the course is done.
