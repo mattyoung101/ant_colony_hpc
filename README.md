@@ -20,6 +20,8 @@ to the food directly. If none of these conditions are available, the ants wander
 - Grid-based: ants can only be in one integer grid cell at a time
   - This is to ideally to improve performance and make it easier to vectorise
   - If you want a denser grid, use a higher resolution grid
+- OR:
+- Do it based on entities and circles. Continuous. So for example the food source is a circle
 
 ## Building and running
 - Compile with Clang 12 or later, CMake and Ninja or Unix Makefiles
@@ -28,7 +30,7 @@ to the food directly. If none of these conditions are available, the ants wander
 ## Attribution
 The following open source libraries are used:
 
-- [lodepng](https://github.com/lvandeve/lodepng), a PNG loading library: zlib licence
+- [stb_image](https://github.com/nothings/stb/blob/master/stb_image.h), an image loading library: Public domain
 - [mINI](https://github.com/pulzed/mINI), an INI config parsing library: MIT licence
 
 ## Licence

@@ -3,8 +3,8 @@
 #pragma once
 
 namespace ants {
-    /// An entity in the grid world
-    class Entity {
+    /// An cell (aka tile) in the grid world
+    struct Tile {
     public:
         /// Called on each entity to update its state
         virtual void update();

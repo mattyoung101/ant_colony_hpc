@@ -8,7 +8,7 @@
 #include <chrono>
 #include "ant_simulation/world.h"
 #include "ant_simulation/ant.h"
-#include "ant_simulation/entity.h"
+#include "ant_simulation/tile.h"
 #include "mini/ini.h"
 
 using namespace ants;

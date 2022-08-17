@@ -3,11 +3,9 @@
 #pragma once
 #include <cstdint>
 #include <array>
-#include "lodepng/lodepng.h"
-#include "ant_simulation/entity.h"
-
-/// Maximum number of entities that can occupy a single grid cell
-#define MAX_ENTITIES_CELL 8
+#include <vector>
+#include "ant_simulation/tile.h"
+#include "ant_simulation/empty.h"
 
 namespace ants {
   class World {
@@ -16,13 +14,20 @@ namespace ants {
       World(uint32_t width, uint32_t height);
 
       /// Instantiates a world from the given PNG file as per specifications
-      World(std::string filename);
+      explicit World(const std::string& filename);
 
       /// Updates the world for one time step
       void update();
 
   private:
       /// 3D array containing the grid (height, width, MAX_ENTITIES_CELL)
-      Entity *grid;
+      Tile *grid{};
+
+      uint32_t width{}, height{};
+
+      /// List of colony data structures. Each colony has both a portion of grid tiles it owns, and
+      /// an entry in this list to keep track of it.
+      // TODO
+      std::vector<int> colonies{};
   };
 };
