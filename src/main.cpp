@@ -6,9 +6,9 @@
 #include <ctime>
 #include <iomanip>
 #include <chrono>
+#include <thread>
 #include "ant_simulation/world.h"
-#include "ant_simulation/ant.h"
-#include "ant_simulation/tile.h"
+#include "microtar/microtar.h"
 #include "mini/ini.h"
 
 using namespace ants;
@@ -26,34 +26,39 @@ int main() {
 
     // load the world into memory
     std::string &worldPng = config["Simulation"]["grid_file"];
+
     auto world = World(worldPng);
+
+    // setup recording
+    uint32_t recordInterval = 0;
+    if (config["Simulation"]["recording_enable"] == "true") {
+        recordInterval = std::stoi(config["Simulation"]["disk_write_interval"]);
+        world.setupRecording(config["Simulation"]["output_prefix"]);
+    } else {
+        printf("PNG TAR recording disabled.\n");
+    }
 
     // run the simulation for a fixed number of ticks
     uint32_t numTicks = std::stoi(config["Simulation"]["simulate_ticks"]);
-    printf("Running simulation for %u ticks\n", numTicks);
     auto begin = std::chrono::steady_clock::now();
+    printf("Running simulation for %u ticks\n", numTicks);
 
     for (uint32_t i = 0; i < numTicks; i++) {
-        ;
+        printf("Iteration %u\n", i);
+        if (recordInterval > 0 && i % recordInterval == 0) {
+            world.flushRecording();
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
+
+    world.flushRecording();
+    printf("Simulation done!\n");
 
     auto end = std::chrono::steady_clock::now();
     auto diffMs = std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count();
-    auto ticksPerSecond = (double) numTicks / ((double) diffMs * 1000.0);
-    printf("Simulation done!\n");
-    fprintf(stderr, "Simulated %u ticks in %ld ms (%.2f ticks per second)\n", numTicks, diffMs, ticksPerSecond);
+    auto ticksPerSecond = ((double) numTicks) / ((double) diffMs / 1000.0);
+    world.writeRecordingStatistics(numTicks, diffMs, ticksPerSecond);
 
-    // write and compress the output
-    // we could save a lot of size by only storing the diff between frames (but would take more time to compute)
-    // https://stackoverflow.com/a/16358111/5007892
-    auto t = std::time(nullptr);
-    auto tm = *std::localtime(&t);
-    std::ostringstream oss;
-    oss << std::put_time(&tm, "ants_%d-%m-%Y_%H-%M-%S.zip");
-    auto fileName = oss.str();
-    fprintf(stderr, "Saving data to %s...\n", fileName.c_str());
-
-    printf("All done!\n");
-
+    printf("Simulated %u ticks in %ld ms (%.2f ticks per second)\n", numTicks, diffMs, ticksPerSecond);
     return 0;
 }
