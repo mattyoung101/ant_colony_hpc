@@ -3,12 +3,9 @@
 #include <cstdio>
 #include <cstdint>
 #include <iostream>
-#include <ctime>
-#include <iomanip>
 #include <chrono>
 #include <thread>
 #include "ant_simulation/world.h"
-#include "microtar/microtar.h"
 #include "mini/ini.h"
 
 using namespace ants;
@@ -28,12 +25,13 @@ int main() {
     std::string &worldPng = config["Simulation"]["grid_file"];
 
     auto world = World(worldPng);
+    auto worldCopy = world;
 
     // setup recording
     uint32_t recordInterval = 0;
-    if (config["Simulation"]["recording_enable"] == "true") {
+    if (config["Simulation"]["recording_enabled"] == "true") {
         recordInterval = std::stoi(config["Simulation"]["disk_write_interval"]);
-        world.setupRecording(config["Simulation"]["output_prefix"]);
+        world.setupRecording(config["Simulation"]["output_prefix"], recordInterval);
     } else {
         printf("PNG TAR recording disabled.\n");
     }
@@ -45,10 +43,9 @@ int main() {
 
     for (uint32_t i = 0; i < numTicks; i++) {
         printf("Iteration %u\n", i);
-        if (recordInterval > 0 && i % recordInterval == 0) {
+        if (recordInterval > 0 && i % recordInterval == 0 && i > 0) {
             world.flushRecording();
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
     world.flushRecording();

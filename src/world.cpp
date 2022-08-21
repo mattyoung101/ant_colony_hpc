@@ -7,6 +7,14 @@
 #include "ant_simulation/world.h"
 #include "stb/stb_image.h"
 #include "stb/stb_image_write.h"
+#include "ant_simulation/colony_record.h"
+#include "ant_simulation/colony_tile.h"
+
+/// Maximum number of entities on top of each other in a cell
+#define MAX_ENTITIES_CELL 4
+
+/// Divide to convert bytes to MiB
+#define BYTES2MIB 1048576
 
 using namespace ants;
 
@@ -22,11 +30,14 @@ World::World(const std::string& filename) {
     }
     width = imgWidth;
     height = imgHeight;
+    grid = new Tile***[height];
 
     for (int32_t y = 0; y < imgHeight; y++) {
-        std::vector<std::vector<Tile>> row{};
+        Tile ***row = new Tile**[width];
+
         for (int32_t x = 0; x < imgWidth; x++) {
-            Tile cell;
+            Tile **cells = new Tile*[MAX_ENTITIES_CELL];
+
             // https://www.reddit.com/r/opengl/comments/8gyyb6/comment/dygokra/
             uint8_t *p = image + (channels * (y * imgWidth + x));
             uint8_t r = p[0];
@@ -35,28 +46,34 @@ World::World(const std::string& filename) {
 
             if (r == 0 && g == 0 && b == 0) {
                 // black, empty square, skip
-                cell = Empty();
+                cells[0] = new Empty();
             } else if (g == 255) {
                 // green, food
-                //printf("Found green!\n");
-                cell = Empty();
+                cells[0] = new Empty();
             } else if (r == 128 && g == 128 && b == 128) {
                 // grey, obstacle
                 //printf("Found grey!\n");
-                cell = Empty();
+                cells[0] = new Empty();
             } else {
                 // colony
-                cell = Empty();
+                cells[0] = new Empty();
             }
 
-            // we only have one item in this cell to start with, but we require
-            std::vector<Tile> entry{};
-            entry.emplace_back(cell);
-            // add to row
-            row.emplace_back(entry);
+            // fill remaining entities with an Empty entity so we can call methods on it
+            for (int i = 1; i < MAX_ENTITIES_CELL; i++) {
+                cells[i] = new Empty();
+            }
+
+            approxGridSize += MAX_ENTITIES_CELL * sizeof(Tile*); // NOLINT this sizeof is valid
+
+            // insert the list of cells into the row
+            row[x] = cells;
         }
-        grid.emplace_back(row);
+
+        // add the row to the grid
+        grid[y] = row;
     }
+    printf("Approximate grid size: %zu MiB\n", approxGridSize / BYTES2MIB);
 
     stbi_image_free(image);
 }
@@ -70,6 +87,18 @@ World::~World() {
     } else {
         printf("Warning: PNG TAR recording failed to initiailse so not being finalised\n");
     }
+
+    // delete grid
+    for (uint32_t y = 0; y < height; y++) {
+        for (uint32_t x = 0; x < width; x++) {
+            for (int entity = 0; entity < MAX_ENTITIES_CELL; entity++) {
+                delete grid[y][x][entity];
+            }
+            delete[] grid[y][x];
+        }
+        delete[] grid[y];
+    }
+    delete[] grid;
 }
 
 static std::string generateFileName(const std::string &prefix) {
@@ -81,17 +110,18 @@ static std::string generateFileName(const std::string &prefix) {
     return oss.str();
 }
 
-void World::setupRecording(const std::string &prefix) {
+void World::setupRecording(const std::string &prefix, uint32_t recordInterval) {
     auto filename = generateFileName(prefix);
 
     int err = mtar_open(&tarfile, filename.c_str(), "w");
     if (err != 0) {
         std::ostringstream oss;
-        oss << "Warning: Failed to open PNG TAR file " << filename << " for writing: err " << err << "\n";
+        oss << "Warning: Failed to create PNG TAR recording in " << filename << ": " << mtar_strerror(err) << "\n";
         fprintf(stderr, "%s", oss.str().c_str());
     }
 
-    printf("Opened output PNG TAR %s for writing\n", filename.c_str());
+    printf("Opened output PNG TAR file %s for writing\n", filename.c_str());
+    printf("Estimated recording buffer max usage: %zu MiB\n", (approxGridSize * recordInterval) / BYTES2MIB);
     tarfileOk = true;
 }
 
@@ -107,6 +137,10 @@ void World::writeRecordingStatistics(uint32_t numTicks, long numMs, double ticks
     auto str = oss.str();
     mtar_write_file_header(&tarfile, "stats.txt", str.length());
     mtar_write_data(&tarfile, str.c_str(), str.length());
+}
+
+static void write_func(void *context, void *data, int size) {
+    // TODO
 }
 
 void World::flushRecording() {
