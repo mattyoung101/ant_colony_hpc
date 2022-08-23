@@ -36,7 +36,7 @@ Then we would look up which type it is and do a `static_cast`
 - Grid data structure that _only_ contains empty tiles, pheromones, and food
   - Basically a single Tile class with an enum for if its Empty, Pheromone or Food
 - List of ColonyRecords to keep track of colony statistics and which ants belong to which colony
-- Ants are still integer, but are stored in an array in each ColonyRecord
+- Ants are still integer, but are stored in an array in each Colony
 - **This method seems the best**
 
 ## Second design, v2

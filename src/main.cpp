@@ -5,7 +5,7 @@
 #include <iostream>
 #include <chrono>
 #include <thread>
-#include "ant_simulation/world.h"
+#include "ants/world.h"
 #include "mini/ini.h"
 #include "log/log.h"
 

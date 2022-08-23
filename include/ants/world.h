@@ -4,24 +4,15 @@
 #include <cstdint>
 #include <array>
 #include <vector>
-#include "ant_simulation/tile.h"
-#include "ant_simulation/empty.h"
 #include "microtar/microtar.h"
-#include "ant_simulation/colony_record.h"
+#include "ants/colony.h"
+#include "ants/food.h"
+#include "ants/colony.h"
+#include "ants/pheromone.h"
+#include "ants/food.h"
+#include "ants/colony_tile.h"
 
 namespace ants {
-    /**
-     * This is probably the world's ugliest data type, but it's like this
-     * height -->
-     *      width -->
-     *          entities in cell -->
-     *              Entity 1 ptr
-     *              Entity 2 ptr
-     *              ...
-     * So, in other words, a 3D array [height][width][cell entities] of Tile pointers
-     */
-    typedef Tile**** AntGrid_t;
-
     class World {
     public:
         /// Instantiates a world from the given PNG file as per specifications
@@ -55,11 +46,19 @@ namespace ants {
         void flushRecording();
 
         /// Allocates and creates a clone of the grid. Expensive in complexity and memory.
-        AntGrid_t cloneGrid();
+        // TODO
 
     private:
-        /// 3D array containing the grid (height, width, entities on this tile)
-        AntGrid_t grid{};
+        /// Grid of food tiles
+        Food ***foodGrid;
+        /// Grid of pheromone tiles
+        Pheromone ***pheromoneGrid;
+        /// Grid of colony tiles, only used for debugging
+        ColonyTile ***colonyGrid;
+        /// Grid of obstacles
+        bool **obstacleGrid;
+        /// List of colonies
+        std::vector<Colony> colonies{};
 
         /// Grid sizes
         uint32_t width{}, height{};
@@ -68,13 +67,9 @@ namespace ants {
         /// approximate grid size in bytes
         size_t approxGridSize{};
 
-        /// List of colony data structures. Each colony has both a portion of grid tiles it owns, and
-        /// an entry in this list to keep track of it.
-        std::vector<ColonyRecord> colonies{};
-
         /// Buffer of grid data waiting to be encoded into a PNG
         // TODO don't buffer this, and instead just do it on another thread
-        std::vector<AntGrid_t> pngBuffer{};
+        // TODO data structure for this? maybe we should just do array of worlds?
 
         mtar_t tarfile{};
         bool tarfileOk = false;

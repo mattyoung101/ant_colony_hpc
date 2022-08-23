@@ -2,10 +2,10 @@
 // Matt Young, 2022
 #pragma once
 #include <cstdint>
-#include "ant_simulation/utils.h"
+#include "ants/utils.h"
 
 namespace ants {
-    struct ColonyRecord {
+    struct Colony {
         /// Current colony hunger
         double hunger{};
         /// Number of ants we have

@@ -4,17 +4,14 @@
 #include <sstream>
 #include <ctime>
 #include <iomanip>
-#include "ant_simulation/world.h"
+#include "ants/world.h"
 #include "stb/stb_image.h"
 #include "stb/stb_image_write.h"
-#include "ant_simulation/colony_record.h"
-#include "ant_simulation/colony_tile.h"
-#include "ant_simulation/food.h"
-#include "ant_simulation/ant.h"
+#include "ants/colony.h"
+#include "ants/colony_tile.h"
+#include "ants/food.h"
+#include "ants/ant.h"
 #include "log/log.h"
-
-/// Maximum number of entities on top of each other in a cell
-#define MAX_ENTITIES_CELL 4
 
 /// Divide to convert bytes to MiB
 #define BYTES2MIB 1048576
@@ -33,14 +30,20 @@ World::World(const std::string& filename) {
     }
     width = imgWidth;
     height = imgHeight;
-    grid = new Tile***[height];
+
+    // construct grids, initialised with nullptr: https://stackoverflow.com/a/2204380/5007892
+    foodGrid = new Food**[height]{};
+    pheromoneGrid = new Pheromone**[height]{};
+    colonyGrid = new ColonyTile**[height]{};
+    obstacleGrid = new bool*[height]{};
 
     for (int32_t y = 0; y < imgHeight; y++) {
-        Tile ***row = new Tile**[width];
+        auto **foodRow = new Food*[width]{};
+        auto **pheromoneRow = new Pheromone*[width]{};
+        auto **colonyRow = new ColonyTile*[width]{};
+        auto *obstacleRow = new bool[width]{};
 
         for (int32_t x = 0; x < imgWidth; x++) {
-            Tile **cells = new Tile*[MAX_ENTITIES_CELL];
-
             // https://www.reddit.com/r/opengl/comments/8gyyb6/comment/dygokra/
             uint8_t *p = image + (channels * (y * imgWidth + x));
             uint8_t r = p[0];
@@ -49,33 +52,28 @@ World::World(const std::string& filename) {
 
             if (r == 0 && g == 0 && b == 0) {
                 // black, empty square, skip
-                cells[0] = new Empty();
+                continue;
             } else if (g == 255) {
                 // green, food
-                cells[0] = new Empty();
+                foodRow[x] = new Food();
             } else if (r == 128 && g == 128 && b == 128) {
                 // grey, obstacle
-                //printf("Found grey!\n");
-                cells[0] = new Empty();
+                obstacleRow[x] = true;
             } else {
                 // colony
-                cells[0] = new Empty();
+                colonyRow[x] = new ColonyTile(r, g, b);
             }
-
-            // fill remaining entities with an Empty entity so we can call methods on it
-            for (int i = 1; i < MAX_ENTITIES_CELL; i++) {
-                cells[i] = new Empty();
-            }
-
-            approxGridSize += MAX_ENTITIES_CELL * sizeof(Tile*); // NOLINT this sizeof is valid
-
-            // insert the list of cells into the row
-            row[x] = cells;
         }
 
         // add the row to the grid
-        grid[y] = row;
+        foodGrid[y] = foodRow;
+        pheromoneGrid[y] = pheromoneRow;
+        colonyGrid[y] = colonyRow;
+        obstacleGrid[y] = obstacleRow;
     }
+    // I think this is incorrect but whatever
+    approxGridSize = (width * height * sizeof(Food*)) + (width * height * sizeof(ColonyTile*))
+            + (width * height * sizeof(Pheromone*)) + (width * height * sizeof(bool));
     log_debug("Approximate grid RAM usage: %zu MiB", approxGridSize / BYTES2MIB);
 
     stbi_image_free(image);
@@ -92,16 +90,9 @@ World::~World() {
     }
 
     // delete grid
-    for (uint32_t y = 0; y < height; y++) {
-        for (uint32_t x = 0; x < width; x++) {
-            for (int entity = 0; entity < MAX_ENTITIES_CELL; entity++) {
-                delete grid[y][x][entity];
-            }
-            delete[] grid[y][x];
-        }
-        delete[] grid[y];
-    }
-    delete[] grid;
+    delete[] colonyGrid;
+    delete[] foodGrid;
+    delete[] pheromoneGrid;
 }
 
 static std::string generateFileName(const std::string &prefix) {
@@ -142,6 +133,7 @@ void World::writeRecordingStatistics(uint32_t numTicks, long numMs, double ticks
     mtar_write_data(&tarfile, str.c_str(), str.length());
 }
 
+// for stbi_write
 static void write_func(void *context, void *data, int size) {
     // TODO
 }
@@ -151,10 +143,10 @@ void World::flushRecording() {
         return;
 
     int count = 0;
-    for (const auto &pngData : pngBuffer) {
+    /*for (const auto &pngData : pngBuffer) {
         // TODO convert to PNG and flush to TAR
         count++;
     }
-    pngBuffer.clear();
+    pngBuffer.clear();*/
     log_trace("Flushed %d in-memory PNGs to TAR file", count);
 }
