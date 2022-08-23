@@ -7,14 +7,16 @@
 #include <thread>
 #include "ant_simulation/world.h"
 #include "mini/ini.h"
+#include "log/log.h"
 
 using namespace ants;
 
 int main() {
-    printf("COSC3500 Ant Simulator - Matt Young, 2022\n");
+    log_set_level(LOG_TRACE);
+    log_info("COSC3500 Ant Simulator - Matt Young, 2022");
 
     // load config file from disk
-    printf("Loading config file...\n");
+    log_debug("Loading config file...");
     mINI::INIFile configFile("antconfig.ini");
     mINI::INIStructure config{};
     if (!configFile.read(config)) {
@@ -25,7 +27,6 @@ int main() {
     std::string &worldPng = config["Simulation"]["grid_file"];
 
     auto world = World(worldPng);
-    auto worldCopy = world;
 
     // setup recording
     uint32_t recordInterval = 0;
@@ -33,29 +34,29 @@ int main() {
         recordInterval = std::stoi(config["Simulation"]["disk_write_interval"]);
         world.setupRecording(config["Simulation"]["output_prefix"], recordInterval);
     } else {
-        printf("PNG TAR recording disabled.\n");
+        log_debug("PNG TAR recording disabled.");
     }
 
     // run the simulation for a fixed number of ticks
     uint32_t numTicks = std::stoi(config["Simulation"]["simulate_ticks"]);
     auto begin = std::chrono::steady_clock::now();
-    printf("Running simulation for %u ticks\n", numTicks);
+    log_info("Now running simulation for %u ticks", numTicks);
 
     for (uint32_t i = 0; i < numTicks; i++) {
-        printf("Iteration %u\n", i);
+        log_trace("Iteration %u", i);
         if (recordInterval > 0 && i % recordInterval == 0 && i > 0) {
             world.flushRecording();
         }
     }
 
     world.flushRecording();
-    printf("Simulation done!\n");
+    log_info("Simulation done!");
 
     auto end = std::chrono::steady_clock::now();
     auto diffMs = std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count();
     auto ticksPerSecond = ((double) numTicks) / ((double) diffMs / 1000.0);
     world.writeRecordingStatistics(numTicks, diffMs, ticksPerSecond);
 
-    printf("Simulated %u ticks in %ld ms (%.2f ticks per second)\n", numTicks, diffMs, ticksPerSecond);
+    log_info("Simulated %u ticks in %ld ms (%.2f ticks per second)", numTicks, diffMs, ticksPerSecond);
     return 0;
 }

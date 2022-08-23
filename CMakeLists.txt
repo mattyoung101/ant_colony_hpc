@@ -5,6 +5,7 @@ project(ant_colony LANGUAGES C CXX)
 # getafix ships an absolutely pre-historic version of gcc that only compiles up to C++11, but my
 # plan is to ship release builds as static binaries s othey can just be uploaded
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_C_STANDARD 11)
 add_compile_options(-Wall -Wextra -Wno-unused-parameter -Wno-unused-variable -g3)
 # only supported under clang, but should be faster
 # for mold install instructions, see: https://github.com/rui314/mold
@@ -31,5 +32,5 @@ include_directories(include)
 # libraries
 include_directories(lib)
 
-add_executable(ant_colony src/main.cpp src/world.cpp lib/stb/stb_image.c
+add_executable(ant_colony lib/log/log.c lib/log/log.h src/main.cpp src/world.cpp lib/stb/stb_image.c
     src/tile.cpp lib/microtar/microtar.c lib/stb/stb_image_write.c)

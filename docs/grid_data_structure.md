@@ -32,4 +32,21 @@ Then we would look up which type it is and do a `static_cast`
 
 (4) Rewrite the grid data structure (see below)
 
-## Secondary grid size
+## Second design
+- Grid data structure that _only_ contains empty tiles, pheromones, and food
+  - Basically a single Tile class with an enum for if its Empty, Pheromone or Food
+- List of ColonyRecords to keep track of colony statistics and which ants belong to which colony
+- Ants are still integer, but are stored in an array in each ColonyRecord
+- **This method seems the best**
+
+## Second design, v2
+- Same as above, except that we divide the world into "layers": pheromone, food and colony tiles
+- **Since colonies are being a pain, we could always remove them from the game and just keep them around
+to write to the PNG TAR as visualisation**
+- Each layer is a 2D array of pointers to the thing in question
+
+## Continuous design
+- Colonies are circles
+- Ants can move around continuously
+- Ants leave pheromone circles when they move (would have to be inserted into some kind of list)
+- Think this is a bad idea

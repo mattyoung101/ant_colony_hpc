@@ -1,5 +1,5 @@
 // Compiles in stb_image
-// Matt Young, 2022, UQRacing
+// Matt Young, 2022
 #define STB_IMAGE_IMPLEMENTATION
 #define STBI_ONLY_PNG
 #define STBI_ONLY_BMP

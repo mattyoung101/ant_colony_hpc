@@ -1,5 +1,5 @@
 // World source file
-// Matt Young, 2022, UQRacing
+// Matt Young, 2022
 #include <stdexcept>
 #include <sstream>
 #include <ctime>
@@ -9,6 +9,9 @@
 #include "stb/stb_image_write.h"
 #include "ant_simulation/colony_record.h"
 #include "ant_simulation/colony_tile.h"
+#include "ant_simulation/food.h"
+#include "ant_simulation/ant.h"
+#include "log/log.h"
 
 /// Maximum number of entities on top of each other in a cell
 #define MAX_ENTITIES_CELL 4
@@ -19,7 +22,7 @@
 using namespace ants;
 
 World::World(const std::string& filename) {
-    printf("Creating world from PNG %s\n", filename.c_str());
+    log_info("Creating world from PNG %s", filename.c_str());
 
     int32_t imgWidth, imgHeight, channels;
     uint8_t *image = stbi_load(filename.c_str(), &imgWidth, &imgHeight, &channels, 0);
@@ -73,7 +76,7 @@ World::World(const std::string& filename) {
         // add the row to the grid
         grid[y] = row;
     }
-    printf("Approximate grid size: %zu MiB\n", approxGridSize / BYTES2MIB);
+    log_debug("Approximate grid RAM usage: %zu MiB", approxGridSize / BYTES2MIB);
 
     stbi_image_free(image);
 }
@@ -81,11 +84,11 @@ World::World(const std::string& filename) {
 World::~World() {
     // finalise TAR file recording
     if (tarfileOk) {
-        printf("Finalising PNG TAR recording\n");
+        log_debug("Finalising PNG TAR recording");
         mtar_finalize(&tarfile);
         mtar_close(&tarfile);
     } else {
-        printf("Warning: PNG TAR recording failed to initiailse so not being finalised\n");
+        log_info("PNG TAR recording not initialised, so not being finalised");
     }
 
     // delete grid
@@ -117,11 +120,11 @@ void World::setupRecording(const std::string &prefix, uint32_t recordInterval) {
     if (err != 0) {
         std::ostringstream oss;
         oss << "Warning: Failed to create PNG TAR recording in " << filename << ": " << mtar_strerror(err) << "\n";
-        fprintf(stderr, "%s", oss.str().c_str());
+        log_warn("%s", oss.str().c_str());
     }
 
-    printf("Opened output PNG TAR file %s for writing\n", filename.c_str());
-    printf("Estimated recording buffer max usage: %zu MiB\n", (approxGridSize * recordInterval) / BYTES2MIB);
+    log_info("Opened output PNG TAR file %s for writing", filename.c_str());
+    log_debug("Estimated recording buffer max usage: %zu MiB", (approxGridSize * recordInterval) / BYTES2MIB);
     tarfileOk = true;
 }
 
@@ -153,5 +156,5 @@ void World::flushRecording() {
         count++;
     }
     pngBuffer.clear();
-    printf("Flushed %d in-memory PNGs to TAR file\n", count);
+    log_trace("Flushed %d in-memory PNGs to TAR file", count);
 }

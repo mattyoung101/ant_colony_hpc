@@ -1,7 +1,6 @@
 // World class. Defines the grid in the world.
-// Matt Young, 2022, UQRacing
+// Matt Young, 2022
 #pragma once
-
 #include <cstdint>
 #include <array>
 #include <vector>
@@ -21,7 +20,7 @@ namespace ants {
      *              ...
      * So, in other words, a 3D array [height][width][cell entities] of Tile pointers
      */
-    typedef Tile**** ant_grid_t;
+    typedef Tile**** AntGrid_t;
 
     class World {
     public:
@@ -56,11 +55,11 @@ namespace ants {
         void flushRecording();
 
         /// Allocates and creates a clone of the grid. Expensive in complexity and memory.
-        ant_grid_t cloneGrid();
+        AntGrid_t cloneGrid();
 
     private:
         /// 3D array containing the grid (height, width, entities on this tile)
-        ant_grid_t grid{};
+        AntGrid_t grid{};
 
         /// Grid sizes
         uint32_t width{}, height{};
@@ -75,7 +74,7 @@ namespace ants {
 
         /// Buffer of grid data waiting to be encoded into a PNG
         // TODO don't buffer this, and instead just do it on another thread
-        std::vector<ant_grid_t> pngBuffer{};
+        std::vector<AntGrid_t> pngBuffer{};
 
         mtar_t tarfile{};
         bool tarfileOk = false;

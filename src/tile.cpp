@@ -1,5 +1,5 @@
 // Tile source file
-// Matt Young, 2022, UQRacing
+// Matt Young, 2022
 
 #include "ant_simulation/tile.h"
 

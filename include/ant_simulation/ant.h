@@ -4,8 +4,8 @@
 #include "ant_simulation/tile.h"
 
 namespace ants {
-    /// An ant in the simulation
-    class Ant : Tile {
-        
+    class Ant : public Tile {
+    private:
+        bool holdingFood{};
     };
 }
