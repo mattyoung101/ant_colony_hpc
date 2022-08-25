@@ -37,26 +37,38 @@ int main() {
         log_debug("PNG TAR recording disabled.");
     }
 
+
     // run the simulation for a fixed number of ticks
     uint32_t numTicks = std::stoi(config["Simulation"]["simulate_ticks"]);
-    auto begin = std::chrono::steady_clock::now();
+    auto wallClockBegin = std::chrono::steady_clock::now();
+    uint32_t simTimeMs = 0;
     log_info("Now running simulation for %u ticks", numTicks);
 
     for (uint32_t i = 0; i < numTicks; i++) {
         log_trace("Iteration %u", i);
+
+
+        auto simTimeBegin = std::chrono::steady_clock::now();
+        world.update();
+        auto simTimeEnd = std::chrono::steady_clock::now();
+        // TODO update simTimeMs
+
+
         if (recordInterval > 0 && i % recordInterval == 0 && i > 0) {
             world.flushRecording();
         }
     }
-
     world.flushRecording();
+
     log_info("Simulation done!");
 
-    auto end = std::chrono::steady_clock::now();
-    auto diffMs = std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count();
-    auto ticksPerSecond = ((double) numTicks) / ((double) diffMs / 1000.0);
-    world.writeRecordingStatistics(numTicks, diffMs, ticksPerSecond);
+    auto wallClockEnd = std::chrono::steady_clock::now();
+    auto wallDiffMs = std::chrono::duration_cast<std::chrono::milliseconds>(wallClockEnd - wallClockBegin).count();
+    auto wallFps = ((double) numTicks) / ((double) wallDiffMs / 1000.0);
 
-    log_info("Simulated %u ticks in %ld ms (%.2f ticks per second)", numTicks, diffMs, ticksPerSecond);
+    world.writeRecordingStatistics(numTicks, wallDiffMs, wallFps);
+
+    log_info("Wall time: %ld ms (%.2f ticks per second)", wallDiffMs, wallFps);
+    log_info("Sim time: TODO ms");
     return 0;
 }

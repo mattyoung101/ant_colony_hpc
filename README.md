@@ -33,6 +33,7 @@ The following open source libraries are used:
 - [stb_image](https://github.com/nothings/stb/blob/master/stb_image.h), an image loading library: Public domain
 - [stb_image_write](https://github.com/nothings/stb/blob/master/stb_image_write.h), an image writing library: Public domain
 - [mINI](https://github.com/pulzed/mINI), an INI config parsing library: MIT licence
+- [XoroshiroCpp](https://github.com/Reputeless/Xoshiro-cpp): C++ implementation of the Xoroshiro algorithm: MIT licence
 
 ## Licence
 Currently proprietary until the course is done.

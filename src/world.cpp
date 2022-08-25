@@ -4,6 +4,9 @@
 #include <sstream>
 #include <ctime>
 #include <iomanip>
+#include <set>
+#include <unordered_map>
+#include <random>
 #include "ants/world.h"
 #include "stb/stb_image.h"
 #include "stb/stb_image_write.h"
@@ -15,6 +18,17 @@
 
 /// Divide to convert bytes to MiB
 #define BYTES2MIB 1048576
+
+/// Macro to assist in freeing grids
+#define DELETE_GRID(grid) do { \
+for (uint32_t y = 0; y < height; y++) { \
+    for (uint32_t x = 0; x < width; x++) { \
+        delete (grid)[y][x]; \
+    } \
+    delete[] (grid)[y]; \
+} \
+delete[] (grid); \
+} while (0); \
 
 using namespace ants;
 
@@ -34,13 +48,17 @@ World::World(const std::string& filename) {
     // construct grids, initialised with nullptr: https://stackoverflow.com/a/2204380/5007892
     foodGrid = new Food**[height]{};
     pheromoneGrid = new Pheromone**[height]{};
-    colonyGrid = new ColonyTile**[height]{};
     obstacleGrid = new bool*[height]{};
+
+    // mapping between each unique colour and its position
+    std::unordered_map<RGBColour, Vector2i> uniqueColours{};
+
+    // TODO big brain idea for writing out grid - store original image as a background layer and just
+    //  insert ants on top?? would be super easy
 
     for (int32_t y = 0; y < imgHeight; y++) {
         auto **foodRow = new Food*[width]{};
         auto **pheromoneRow = new Pheromone*[width]{};
-        auto **colonyRow = new ColonyTile*[width]{};
         auto *obstacleRow = new bool[width]{};
 
         for (int32_t x = 0; x < imgWidth; x++) {
@@ -53,7 +71,7 @@ World::World(const std::string& filename) {
             if (r == 0 && g == 0 && b == 0) {
                 // black, empty square, skip
                 continue;
-            } else if (g == 255) {
+            } else if (r == 0 && g == 255 && b == 0) {
                 // green, food
                 foodRow[x] = new Food();
             } else if (r == 128 && g == 128 && b == 128) {
@@ -61,26 +79,51 @@ World::World(const std::string& filename) {
                 obstacleRow[x] = true;
             } else {
                 // colony
-                colonyRow[x] = new ColonyTile(r, g, b);
+                // store as a unique colour
+                uniqueColours[RGBColour(r, g, b)] = Vector2i(x, y);
             }
         }
 
         // add the row to the grid
         foodGrid[y] = foodRow;
-        pheromoneGrid[y] = pheromoneRow;
-        colonyGrid[y] = colonyRow;
+        pheromoneGrid[y] = pheromoneRow; // always empty but add it anyway
         obstacleGrid[y] = obstacleRow;
     }
     // I think this is incorrect but whatever
-    approxGridSize = (width * height * sizeof(Food*)) + (width * height * sizeof(ColonyTile*))
+    approxGridSize = (width * height * sizeof(Food*))
             + (width * height * sizeof(Pheromone*)) + (width * height * sizeof(bool));
     log_debug("Approximate grid RAM usage: %zu MiB", approxGridSize / BYTES2MIB);
 
+    log_debug("Have %zu unique colours (unique colonies)", uniqueColours.size());
+
+    // setup colonies
+    for (const auto &pair : uniqueColours) {
+        auto [colour, pos] = pair;
+        log_debug("Colony colour (%d,%d,%d) at %d,%d", colour.r, colour.g, colour.b, pos.x, pos.y);
+
+        Colony colony{};
+        colony.colour = colour;
+        colony.pos = pos;
+        // add starting ants
+        // TODO get real number of ants from config
+        for (int i = 0; i < 100; i++) {
+            Ant ant{};
+            // ant starts at the centre of colony
+            ant.pos = pos;
+            colony.ants.emplace_back(ant);
+        }
+        colonies.emplace_back(colony);
+    }
+
     stbi_image_free(image);
+
+    // TODO put in seed here
+    rng = XoshiroCpp::Xoroshiro128StarStar(256);
 }
 
 World::~World() {
     // finalise TAR file recording
+    // FIXME move this to not a finaliser, have it as as pecial function instead
     if (tarfileOk) {
         log_debug("Finalising PNG TAR recording");
         mtar_finalize(&tarfile);
@@ -90,9 +133,12 @@ World::~World() {
     }
 
     // delete grid
-    delete[] colonyGrid;
-    delete[] foodGrid;
-    delete[] pheromoneGrid;
+    DELETE_GRID(foodGrid)
+    DELETE_GRID(pheromoneGrid)
+    for (uint32_t y = 0; y < height; y++) {
+        delete[] obstacleGrid[y];
+    }
+    delete[] obstacleGrid;
 }
 
 static std::string generateFileName(const std::string &prefix) {
@@ -126,8 +172,8 @@ void World::writeRecordingStatistics(uint32_t numTicks, long numMs, double ticks
     std::ostringstream oss;
     oss << "========== Statistics =========="
            "\nNumber of ticks: " << numTicks <<
-           "\nMilliseconds taken: " << numMs <<
-           "\nTicks per second: " << ticksPerSecond;
+           "\nWall time (ms): " << numMs <<
+           "\nWall TPS: " << ticksPerSecond;
     auto str = oss.str();
     mtar_write_file_header(&tarfile, "stats.txt", str.length());
     mtar_write_data(&tarfile, str.c_str(), str.length());
@@ -149,4 +195,19 @@ void World::flushRecording() {
     }
     pngBuffer.clear();*/
     log_trace("Flushed %d in-memory PNGs to TAR file", count);
+}
+
+void World::update() {
+    std::uniform_int_distribution<int> dist(-1, 1);
+
+    for (const auto &colony : colonies) {
+        for (auto ant : colony.ants) {
+            // move ants by random amount
+            int yOffset = dist(rng);
+            int xOffset = dist(rng);
+
+            ant.pos.x += xOffset;
+            ant.pos.y += yOffset;
+        }
+    }
 }

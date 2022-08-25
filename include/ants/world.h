@@ -11,6 +11,7 @@
 #include "ants/pheromone.h"
 #include "ants/food.h"
 #include "ants/colony_tile.h"
+#include "xoroshiro/XoroshiroCpp.h"
 
 namespace ants {
     class World {
@@ -45,16 +46,14 @@ namespace ants {
         /// Flushes current in-memory buffered PNGs to the disk TAR file
         void flushRecording();
 
-        /// Allocates and creates a clone of the grid. Expensive in complexity and memory.
-        // TODO
+        /// Renders the world to an uncompressed RGB pixel buffer
+        std::vector<uint8_t> renderWorldUncompressed();
 
     private:
         /// Grid of food tiles
         Food ***foodGrid;
         /// Grid of pheromone tiles
         Pheromone ***pheromoneGrid;
-        /// Grid of colony tiles, only used for debugging
-        ColonyTile ***colonyGrid;
         /// Grid of obstacles
         bool **obstacleGrid;
         /// List of colonies
@@ -70,6 +69,9 @@ namespace ants {
         /// Buffer of grid data waiting to be encoded into a PNG
         // TODO don't buffer this, and instead just do it on another thread
         // TODO data structure for this? maybe we should just do array of worlds?
+
+        /// PSRNG
+        XoshiroCpp::Xoroshiro128StarStar rng{};
 
         mtar_t tarfile{};
         bool tarfileOk = false;

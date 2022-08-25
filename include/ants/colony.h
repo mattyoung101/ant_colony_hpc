@@ -3,14 +3,17 @@
 #pragma once
 #include <cstdint>
 #include "ants/utils.h"
+#include "ant.h"
 
 namespace ants {
     struct Colony {
         /// Current colony hunger
-        double hunger{};
-        /// Number of ants we have
-        uint32_t numAnts{};
+        double hunger = 1.0;
         /// Colour of the ant
         RGBColour colour{};
+        /// Position of the colony in the world
+        Vector2i pos{};
+        /// Ants in the colony
+        std::vector<Ant> ants{};
     };
 };

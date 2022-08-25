@@ -3,8 +3,11 @@
 #pragma once
 
 namespace ants {
-    class Ant {
-    private:
+    struct Ant {
+        /// Current position
+        Vector2i pos{};
+
+        /// True if the ant is holding food
         bool holdingFood{};
     };
 }
