@@ -14,24 +14,28 @@
 #include "xoroshiro/XoroshiroCpp.h"
 
 namespace ants {
-    class World {
+    struct World {
+        /// Grid sizes
+        uint32_t width{};
+        /// Grid sizes
+        uint32_t height{};
     public:
         /// Instantiates a world from the given PNG file as per specifications
         explicit World(const std::string &filename);
 
+        World() = default;
+
         ~World();
 
         /// Updates the world for one time step
-        void update();
+        void update() noexcept;
 
         /**
          * Sets up PNG TAR disk output. PNG files are written to a TAR file that can then be downloaded
-         * later. For performance, a certain amount are buffered in memory first, before being written
-         * to disk.
+         * later.
          * @param prefix prefix to write before the
-         * @param recordInterval flush buffer every this many ticks
          */
-        void setupRecording(const std::string &prefix, uint32_t recordInterval);
+        void setupRecording(const std::string &prefix);
 
         /**
          * Writes statistics about the recording to a file called "stats.txt" in the TAR file
@@ -39,41 +43,43 @@ namespace ants {
          * @param numMs total number of milliseconds recording took
          * @param ticksPerSecond number of ticks per second
          */
-        void writeRecordingStatistics(uint32_t numTicks, long numMs, double ticksPerSecond);
+        void writeRecordingStatistics(uint32_t numTicks, double numMs, double ticksPerSecond);
 
-        // TODO when PNGs are written to the tar, do it async (on another thread)
+        /**
+         * Writes the data to the PNG TAR, if recording is enabled
+         * @param filename name of the file with extension to write to
+         * @param data byte buffer of data
+         * @param len length of byte buffer in bytes
+         */
+        void writeToTar(const std::string &filename, uint8_t *data, size_t len);
 
-        /// Flushes current in-memory buffered PNGs to the disk TAR file
-        void flushRecording();
+        /// Finalises the PNG TAR recording. Must be called before program exit.
+        void finaliseRecording();
 
         /// Renders the world to an uncompressed RGB pixel buffer
-        std::vector<uint8_t> renderWorldUncompressed();
+        std::vector<uint8_t> renderWorldUncompressed() const;
 
     private:
         /// Grid of food tiles
-        Food ***foodGrid;
+        Food ***foodGrid{};
         /// Grid of pheromone tiles
-        Pheromone ***pheromoneGrid;
+        Pheromone ***pheromoneGrid{};
         /// Grid of obstacles
-        bool **obstacleGrid;
+        bool **obstacleGrid{};
         /// List of colonies
         std::vector<Colony> colonies{};
 
-        /// Grid sizes
-        uint32_t width{}, height{};
         /// Number of ticks performed
         uint32_t tickCount{};
         /// approximate grid size in bytes
         size_t approxGridSize{};
 
-        /// Buffer of grid data waiting to be encoded into a PNG
-        // TODO don't buffer this, and instead just do it on another thread
-        // TODO data structure for this? maybe we should just do array of worlds?
-
         /// PSRNG
-        XoshiroCpp::Xoroshiro128StarStar rng{};
+        XoshiroCpp::Xoshiro256StarStar rng{};
 
+        /// PNG TAR output file
         mtar_t tarfile{};
+        /// true if PNG TAR recording initialised successfully
         bool tarfileOk = false;
     };
 };

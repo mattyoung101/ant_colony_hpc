@@ -5,11 +5,35 @@
 #include <iostream>
 #include <chrono>
 #include <thread>
+#include <utility>
 #include "ants/world.h"
 #include "mini/ini.h"
 #include "log/log.h"
+#include "ants/utils.h"
+#include "stb/stb_image_write.h"
+
+/// Counts the time in milliseconds between end and begin as a double. The time is counted as nanoseconds
+/// for accuracy, then converted as a double to milliseconds.
+#define COUNT_MS(end, begin) static_cast<double>( \
+    std::chrono::duration_cast<std::chrono::nanoseconds>(end - begin).count()) / 1e6
 
 using namespace ants;
+
+/// Used for stbi image write, as the context parameter
+struct ImageContext {
+    std::string filename;
+    World &world;
+
+    ImageContext(std::string filename, World &world) : filename(std::move(filename)), world(world) {}
+};
+
+// for stbi_write
+// the context pointer is the world instance
+static void write_func(void *context, void *data, int size) {
+    auto imageContext = static_cast<ImageContext*>(context);
+    log_trace("Writing %zu bytes to TAR file %s", size, imageContext->filename.c_str());
+    imageContext->world.writeToTar(imageContext->filename, static_cast<uint8_t*>(data), size);
+}
 
 int main() {
     log_set_level(LOG_TRACE);
@@ -24,51 +48,74 @@ int main() {
     }
 
     // load the world into memory
-    std::string &worldPng = config["Simulation"]["grid_file"];
+    auto world = World(config["Simulation"]["grid_file"]);
 
-    auto world = World(worldPng);
 
     // setup recording
-    uint32_t recordInterval = 0;
-    if (config["Simulation"]["recording_enabled"] == "true") {
-        recordInterval = std::stoi(config["Simulation"]["disk_write_interval"]);
-        world.setupRecording(config["Simulation"]["output_prefix"], recordInterval);
+    bool recordingEnabled = config["Simulation"]["recording_enabled"] == "true";
+    if (recordingEnabled) {
+        world.setupRecording(config["Simulation"]["output_prefix"]);
     } else {
         log_debug("PNG TAR recording disabled.");
     }
 
-
     // run the simulation for a fixed number of ticks
     uint32_t numTicks = std::stoi(config["Simulation"]["simulate_ticks"]);
     auto wallClockBegin = std::chrono::steady_clock::now();
-    uint32_t simTimeMs = 0;
+    double simTimeMs = 0;
     log_info("Now running simulation for %u ticks", numTicks);
+
+    // buffer of uncompressed pixels that need to be turned into PNGs and written to disk
+    std::vector<std::vector<uint8_t>> images{};
+    images.reserve(numTicks);
 
     for (uint32_t i = 0; i < numTicks; i++) {
         log_trace("Iteration %u", i);
 
-
         auto simTimeBegin = std::chrono::steady_clock::now();
         world.update();
         auto simTimeEnd = std::chrono::steady_clock::now();
-        // TODO update simTimeMs
+        simTimeMs += COUNT_MS(simTimeEnd, simTimeBegin);
 
-
-        if (recordInterval > 0 && i % recordInterval == 0 && i > 0) {
-            world.flushRecording();
-        }
+        // render world and add to uncompressed queue
+        if (recordingEnabled)
+            images.emplace_back(world.renderWorldUncompressed());
     }
-    world.flushRecording();
+
+    // go over each uncompressed image and compress it to the TAR file
+    if (recordingEnabled) {
+        size_t totalBytes = 0;
+        log_info("Finalising PNG output (%zu images)", images.size());
+        for (size_t i = 0; i < images.size(); i++) {
+            auto image = images[i];
+            totalBytes += image.size();
+
+            // generate the filename and context for stb image write
+            std::ostringstream ostream;
+            ostream << i << ".png";
+            ImageContext context(ostream.str(), world);
+
+            // encode the png
+            int w = static_cast<int>(world.width);
+            int h = static_cast<int>(world.height);
+            stbi_write_png_to_func(write_func, &context, w, h, 3, image.data(), w * 3);
+        }
+        log_info("Uncompressed image RAM usage was %zu MiB", totalBytes / BYTES2MIB);
+    }
 
     log_info("Simulation done!");
 
+    // record times
     auto wallClockEnd = std::chrono::steady_clock::now();
-    auto wallDiffMs = std::chrono::duration_cast<std::chrono::milliseconds>(wallClockEnd - wallClockBegin).count();
-    auto wallFps = ((double) numTicks) / ((double) wallDiffMs / 1000.0);
+    auto wallTimeMs = COUNT_MS(wallClockEnd, wallClockBegin);
+    auto wallFps = static_cast<double>(numTicks) / (static_cast<double>(wallTimeMs) / 1000.0);
+    auto simFps = static_cast<double>(numTicks) / (static_cast<double>(simTimeMs) / 1000.0);
 
-    world.writeRecordingStatistics(numTicks, wallDiffMs, wallFps);
+    // finalise recording
+    world.writeRecordingStatistics(numTicks, wallTimeMs, wallFps);
+    world.finaliseRecording();
 
-    log_info("Wall time: %ld ms (%.2f ticks per second)", wallDiffMs, wallFps);
-    log_info("Sim time: TODO ms");
+    log_info("Wall time: %.3f ms (%.3f ticks per second)", wallTimeMs, wallFps);
+    log_info("Sim time: %.3f ms (%.3f ticks per second)", simTimeMs, simFps);
     return 0;
 }

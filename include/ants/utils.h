@@ -1,12 +1,17 @@
 // Miscellaneous structs
 // Matt Young, 2022
+#pragma once
 #include <cstdint>
+#include <functional>
+#include <string>
+
+/// Divide to convert bytes to MiB
+#define BYTES2MIB 1048576
 
 namespace ants {
     // Source: https://stackoverflow.com/a/2595226/5007892
     template <class T>
-    inline void hash_combine(std::size_t& seed, const T& v)
-    {
+    inline void hashCombine(std::size_t& seed, const T& v) {
         std::hash<T> hasher;
         seed ^= hasher(v) + 0x9e3779b9 + (seed<<6) + (seed>>2);
     }
@@ -141,8 +146,8 @@ namespace std {
         std::size_t operator()(const ants::RGBColour& c) const
         {
             size_t seed = c.r;
-            ants::hash_combine(seed, c.g);
-            ants::hash_combine(seed, c.b);
+            ants::hashCombine(seed, c.g);
+            ants::hashCombine(seed, c.b);
             return seed;
         }
     };

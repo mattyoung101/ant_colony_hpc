@@ -23,7 +23,7 @@ if ("${CMAKE_BUILD_TYPE}" STREQUAL "Release")
     add_link_options(-flto -static)
 else()
     message(STATUS "Debug build, enabling sanitizers")
-    add_compile_options(-O0 -fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer)
+    add_compile_options(-Og -fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer)
     add_link_options(-fsanitize=address -fsanitize=undefined)
 endif()
 
@@ -33,4 +33,4 @@ include_directories(include)
 include_directories(lib)
 
 add_executable(ant_colony lib/log/log.c lib/log/log.h src/main.cpp src/world.cpp lib/stb/stb_image.c
-    lib/microtar/microtar.c lib/stb/stb_image_write.c)
+    lib/microtar/microtar.c lib/stb/stb_image_write.c src/utils.cpp)

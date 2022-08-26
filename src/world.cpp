@@ -16,9 +16,6 @@
 #include "ants/ant.h"
 #include "log/log.h"
 
-/// Divide to convert bytes to MiB
-#define BYTES2MIB 1048576
-
 /// Macro to assist in freeing grids
 #define DELETE_GRID(grid) do { \
 for (uint32_t y = 0; y < height; y++) { \
@@ -89,10 +86,6 @@ World::World(const std::string& filename) {
         pheromoneGrid[y] = pheromoneRow; // always empty but add it anyway
         obstacleGrid[y] = obstacleRow;
     }
-    // I think this is incorrect but whatever
-    approxGridSize = (width * height * sizeof(Food*))
-            + (width * height * sizeof(Pheromone*)) + (width * height * sizeof(bool));
-    log_debug("Approximate grid RAM usage: %zu MiB", approxGridSize / BYTES2MIB);
 
     log_debug("Have %zu unique colours (unique colonies)", uniqueColours.size());
 
@@ -118,20 +111,10 @@ World::World(const std::string& filename) {
     stbi_image_free(image);
 
     // TODO put in seed here
-    rng = XoshiroCpp::Xoroshiro128StarStar(256);
+    rng = XoshiroCpp::Xoshiro256StarStar(256);
 }
 
 World::~World() {
-    // finalise TAR file recording
-    // FIXME move this to not a finaliser, have it as as pecial function instead
-    if (tarfileOk) {
-        log_debug("Finalising PNG TAR recording");
-        mtar_finalize(&tarfile);
-        mtar_close(&tarfile);
-    } else {
-        log_info("PNG TAR recording not initialised, so not being finalised");
-    }
-
     // delete grid
     DELETE_GRID(foodGrid)
     DELETE_GRID(pheromoneGrid)
@@ -150,7 +133,7 @@ static std::string generateFileName(const std::string &prefix) {
     return oss.str();
 }
 
-void World::setupRecording(const std::string &prefix, uint32_t recordInterval) {
+void World::setupRecording(const std::string &prefix) {
     auto filename = generateFileName(prefix);
 
     int err = mtar_open(&tarfile, filename.c_str(), "w");
@@ -160,12 +143,12 @@ void World::setupRecording(const std::string &prefix, uint32_t recordInterval) {
         log_warn("%s", oss.str().c_str());
     }
 
-    log_info("Opened output PNG TAR file %s for writing", filename.c_str());
-    log_debug("Estimated recording buffer max usage: %zu MiB", (approxGridSize * recordInterval) / BYTES2MIB);
+    log_info("Opened output TAR file %s for writing", filename.c_str());
     tarfileOk = true;
 }
 
-void World::writeRecordingStatistics(uint32_t numTicks, long numMs, double ticksPerSecond) {
+// TODO write wall time AND sim time
+void World::writeRecordingStatistics(uint32_t numTicks, double numMs, double ticksPerSecond) {
     if (!tarfileOk)
         return;
 
@@ -179,25 +162,7 @@ void World::writeRecordingStatistics(uint32_t numTicks, long numMs, double ticks
     mtar_write_data(&tarfile, str.c_str(), str.length());
 }
 
-// for stbi_write
-static void write_func(void *context, void *data, int size) {
-    // TODO
-}
-
-void World::flushRecording() {
-    if (!tarfileOk)
-        return;
-
-    int count = 0;
-    /*for (const auto &pngData : pngBuffer) {
-        // TODO convert to PNG and flush to TAR
-        count++;
-    }
-    pngBuffer.clear();*/
-    log_trace("Flushed %d in-memory PNGs to TAR file", count);
-}
-
-void World::update() {
+void World::update() noexcept {
     std::uniform_int_distribution<int> dist(-1, 1);
 
     for (const auto &colony : colonies) {
@@ -210,4 +175,39 @@ void World::update() {
             ant.pos.y += yOffset;
         }
     }
+}
+
+void World::finaliseRecording() {
+    if (tarfileOk) {
+        log_debug("Finalising TAR file");
+        mtar_finalize(&tarfile);
+        mtar_close(&tarfile);
+    } else {
+        log_info("PNG TAR recording not initialised, so not being finalised");
+    }
+}
+
+std::vector<uint8_t> World::renderWorldUncompressed() const {
+    std::vector<uint8_t> out{};
+    out.reserve(width * height * 3);
+
+    for (uint32_t y = 0; y < height; y++) {
+        for (uint32_t x = 0; x < width; x++) {
+            // write just red
+            out.emplace_back(x);
+            out.emplace_back(y);
+            out.emplace_back(0);
+        }
+    }
+
+    return out;
+}
+
+void World::writeToTar(const std::string &filename, uint8_t *data, size_t len) {
+    if (!tarfileOk) {
+        return;
+    }
+
+    mtar_write_file_header(&tarfile, filename.c_str(), len);
+    mtar_write_data(&tarfile, data, len);
 }
