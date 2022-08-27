@@ -48,7 +48,7 @@ int main() {
     }
 
     // load the world into memory
-    auto world = World(config["Simulation"]["grid_file"]);
+    auto world = World(config["Simulation"]["grid_file"], config);
 
 
     // setup recording
@@ -98,6 +98,7 @@ int main() {
             // encode the png
             int w = static_cast<int>(world.width);
             int h = static_cast<int>(world.height);
+            // source: https://solarianprogrammer.com/2019/06/10/c-programming-reading-writing-images-stb_image-libraries/
             stbi_write_png_to_func(write_func, &context, w, h, 3, image.data(), w * 3);
         }
         log_info("Uncompressed image RAM usage was %zu MiB", totalBytes / BYTES2MIB);
@@ -112,7 +113,8 @@ int main() {
     auto simFps = static_cast<double>(numTicks) / (static_cast<double>(simTimeMs) / 1000.0);
 
     // finalise recording
-    world.writeRecordingStatistics(numTicks, wallTimeMs, wallFps);
+    world.writeRecordingStatistics(numTicks, TimeInfo(wallTimeMs, wallFps),
+                                   TimeInfo(simTimeMs, simFps));
     world.finaliseRecording();
 
     log_info("Wall time: %.3f ms (%.3f ticks per second)", wallTimeMs, wallFps);

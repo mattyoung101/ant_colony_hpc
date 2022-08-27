@@ -33,4 +33,4 @@ include_directories(include)
 include_directories(lib)
 
 add_executable(ant_colony lib/log/log.c lib/log/log.h src/main.cpp src/world.cpp lib/stb/stb_image.c
-    lib/microtar/microtar.c lib/stb/stb_image_write.c src/utils.cpp)
+    lib/microtar/microtar.c lib/stb/stb_image_write.c src/utils.cpp lib/tinycolor/tinycolormap.hpp)

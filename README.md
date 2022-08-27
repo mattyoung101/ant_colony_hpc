@@ -30,10 +30,11 @@ to the food directly. If none of these conditions are available, the ants wander
 ## Attribution
 The following open source libraries are used:
 
-- [stb_image](https://github.com/nothings/stb/blob/master/stb_image.h), an image loading library: Public domain
-- [stb_image_write](https://github.com/nothings/stb/blob/master/stb_image_write.h), an image writing library: Public domain
-- [mINI](https://github.com/pulzed/mINI), an INI config parsing library: MIT licence
-- [XoroshiroCpp](https://github.com/Reputeless/Xoshiro-cpp): C++ implementation of the Xoroshiro algorithm: MIT licence
+- [stb_image](https://github.com/nothings/stb/blob/master/stb_image.h): image loading library: Public domain
+- [stb_image_write](https://github.com/nothings/stb/blob/master/stb_image_write.h): image writing library: Public domain
+- [mINI](https://github.com/pulzed/mINI): INI config parsing library: MIT licence
+- [XoroshiroCpp](https://github.com/Reputeless/Xoshiro-cpp): C++ implementation of the Xoshiro PRNG algorithm: MIT licence
+- [tinycolormap](https://github.com/yuki-koyama/tinycolormap): Matplotlib colour maps in C++: MIT licence
 
 ## Licence
 Currently proprietary until the course is done.

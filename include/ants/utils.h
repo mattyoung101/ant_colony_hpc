@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <functional>
 #include <string>
+#include <ostream>
 
 /// Divide to convert bytes to MiB
 #define BYTES2MIB 1048576
@@ -134,6 +135,19 @@ namespace ants {
 
         bool operator>=(const Vector2f &rhs) const {
             return !(*this < rhs);
+        }
+    };
+
+    /// Stores a millisecond time and frames per second measure
+    struct TimeInfo {
+        double timeMs{};
+        double fps{};
+
+        TimeInfo(double timeMs, double fps) : timeMs(timeMs), fps(fps) {}
+
+        friend std::ostream &operator<<(std::ostream &os, const TimeInfo &info) {
+            os << info.timeMs << "ms (" << info.fps << " ticks per second)";
+            return os;
         }
     };
 };

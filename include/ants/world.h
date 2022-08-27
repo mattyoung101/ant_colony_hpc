@@ -10,8 +10,9 @@
 #include "ants/colony.h"
 #include "ants/pheromone.h"
 #include "ants/food.h"
-#include "ants/colony_tile.h"
 #include "xoroshiro/XoroshiroCpp.h"
+#include "mini/ini.h"
+#include "tinycolor/tinycolormap.hpp"
 
 namespace ants {
     struct World {
@@ -21,7 +22,7 @@ namespace ants {
         uint32_t height{};
     public:
         /// Instantiates a world from the given PNG file as per specifications
-        explicit World(const std::string &filename);
+        explicit World(const std::string &filename, mINI::INIStructure config);
 
         World() = default;
 
@@ -40,10 +41,10 @@ namespace ants {
         /**
          * Writes statistics about the recording to a file called "stats.txt" in the TAR file
          * @param numTicks number of ticks done
-         * @param numMs total number of milliseconds recording took
-         * @param ticksPerSecond number of ticks per second
+         * @param wallTime time it took real-time for the simulation to run
+         * @param simTime time it took ONLY the simulation part to run (excluding PNG IO)
          */
-        void writeRecordingStatistics(uint32_t numTicks, double numMs, double ticksPerSecond);
+        void writeRecordingStatistics(uint32_t numTicks, TimeInfo wallTime, TimeInfo simTime);
 
         /**
          * Writes the data to the PNG TAR, if recording is enabled
@@ -57,7 +58,7 @@ namespace ants {
         void finaliseRecording();
 
         /// Renders the world to an uncompressed RGB pixel buffer
-        std::vector<uint8_t> renderWorldUncompressed() const;
+        [[nodiscard]] std::vector<uint8_t> renderWorldUncompressed() const;
 
     private:
         /// Grid of food tiles
@@ -68,11 +69,6 @@ namespace ants {
         bool **obstacleGrid{};
         /// List of colonies
         std::vector<Colony> colonies{};
-
-        /// Number of ticks performed
-        uint32_t tickCount{};
-        /// approximate grid size in bytes
-        size_t approxGridSize{};
 
         /// PSRNG
         XoshiroCpp::Xoshiro256StarStar rng{};
