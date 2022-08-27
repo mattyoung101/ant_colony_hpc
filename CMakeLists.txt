@@ -7,7 +7,7 @@ project(ant_colony LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_C_STANDARD 11)
 add_compile_options(-Wall -Wextra -Wno-unused-parameter -Wno-unused-variable -g3)
-# only supported under clang, but should be faster
+# only supported under clang, but should be faster and allegedly better
 # for mold install instructions, see: https://github.com/rui314/mold
 add_link_options(-fuse-ld=mold)
 

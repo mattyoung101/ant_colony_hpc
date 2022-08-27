@@ -17,15 +17,24 @@ of ticks. If the colony hunger meter becomes empty, then the colony is disqualif
 to the food directly. If none of these conditions are available, the ants wander randomly.
 
 ## Implementation details
-- Grid-based: ants can only be in one integer grid cell at a time
-  - This is to ideally to improve performance and make it easier to vectorise
-  - If you want a denser grid, use a higher resolution grid
-- OR:
-- Do it based on entities and circles. Continuous. So for example the food source is a circle.
+See the docs folder for most of this.
+
+TODO document some in here
 
 ## Building and running
-- Compile with Clang 12 or later, CMake and Ninja or Unix Makefiles
-- GCC may work as well, but you may have to change some stuff related to profiling
+Compile with at least Clang 12 (preferred), GCC 10, or later. The latest available version of CMake
+is recommended. If I end up adding PGO, you may need to change some compiler options to get PGO working
+in GCC.
+
+Debug and Release targets are supported in CMake. The Release target is designed to run on UQ SMP's
+_getafix_ "high"-performance computing training server, which runs a decade old Intel CPU, so it uses
+a particular march flag for this. It is also statically linked for similar reasons (getafix ships a decade
+old CPU and decade old gcc version, so no compiling on there). The Debug target enables AddressSanitizer
+and UndefinedBehaviourSanitizer and is slow for that reason.
+
+Make sure that antconfig.ini, maps/, and results/ and the ant_colony executable are in your working
+directory. Then run ant_colony and it will do the rest. Feel free to take a look at antconfig.ini
+to see what you can change.
 
 ## Attribution
 The following open source libraries are used:
@@ -33,6 +42,7 @@ The following open source libraries are used:
 - [stb_image](https://github.com/nothings/stb/blob/master/stb_image.h): image loading library: Public domain
 - [stb_image_write](https://github.com/nothings/stb/blob/master/stb_image_write.h): image writing library: Public domain
 - [mINI](https://github.com/pulzed/mINI): INI config parsing library: MIT licence
+- [microtar](https://github.com/rxi/microtar): TAR IO library for C: MIT licence
 - [XoroshiroCpp](https://github.com/Reputeless/Xoshiro-cpp): C++ implementation of the Xoshiro PRNG algorithm: MIT licence
 - [tinycolormap](https://github.com/yuki-koyama/tinycolormap): Matplotlib colour maps in C++: MIT licence
 

@@ -20,7 +20,7 @@ namespace ants {
         uint32_t width{};
         /// Grid sizes
         uint32_t height{};
-    public:
+
         /// Instantiates a world from the given PNG file as per specifications
         explicit World(const std::string &filename, mINI::INIStructure config);
 
@@ -70,12 +70,14 @@ namespace ants {
         /// List of colonies
         std::vector<Colony> colonies{};
 
-        /// PSRNG
+        /// PRNG
         XoshiroCpp::Xoshiro256StarStar rng{};
 
         /// PNG TAR output file
         mtar_t tarfile{};
         /// true if PNG TAR recording initialised successfully
         bool tarfileOk = false;
+        /// Path to where the recording is saved
+        std::string recordingPath{};
     };
 };

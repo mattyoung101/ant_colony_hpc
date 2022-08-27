@@ -8,7 +8,7 @@ import numpy as np
 # Desired milliseconds between each frame
 FRAME_MS = 100.0
 # Factor to resize the images by, 1.0 = same size
-SCALE_FACTOR = 1.5
+SCALE_FACTOR = 5.0
 
 
 # https://stackoverflow.com/a/25198846/5007892
@@ -32,6 +32,7 @@ if __name__ == "__main__":
                 img = cv2.resize(img, (0, 0), fx=SCALE_FACTOR, fy=SCALE_FACTOR, interpolation=cv2.INTER_NEAREST)
                 cv2.imshow("Recording", img)
 
+                # TODO if last frame of simulation, pause
                 key = cv2.waitKey(int(FRAME_MS))
                 # check if escape was pressed
                 if key == 27:

@@ -133,6 +133,7 @@ static std::string generateFileName(const std::string &prefix) {
 
 void World::setupRecording(const std::string &prefix) {
     auto filename = generateFileName(prefix);
+    recordingPath = filename;
 
     int err = mtar_open(&tarfile, filename.c_str(), "w");
     if (err != 0) {
@@ -172,18 +173,33 @@ static inline constexpr T clamp(T value, T min, T max) {
     }
 }
 
+/// See ant_navigation.md. Normalised distance to food vs. noise/data mix factor.
+static inline constexpr double distanceLookup(double x) {
+    double g = 2.3;
+    double k = 0.2;
+    return k * exp(g * x);
+}
+
 void World::update() noexcept {
     std::uniform_int_distribution<int> dist(-1, 1);
 
-    // FIXME don't allow ant to go out of bounds
     for (auto &colony: colonies) {
         for (auto &ant: colony.ants) {
             // move ants by random amount
             int yOffset = dist(rng);
             int xOffset = dist(rng);
 
-            ant.pos.x += xOffset;
-            ant.pos.y += yOffset;
+            int32_t newX = ant.pos.x + xOffset;
+            int32_t newY = ant.pos.y + yOffset;
+
+            // only move the ant if it wouldn't intersect an obstacle, and is in bounds
+            if (newX < 0 || newY < 0 || newX >= static_cast<int32_t>(width) ||
+                    newY >= static_cast<int32_t>(height) || obstacleGrid[newY][newX]) {
+                continue;
+            }
+
+            ant.pos.x = newX;
+            ant.pos.y = newY;
             pheromoneGrid[ant.pos.y][ant.pos.x]->value += 0.01;
         }
     }
@@ -191,7 +207,7 @@ void World::update() noexcept {
 
 void World::finaliseRecording() {
     if (tarfileOk) {
-        log_debug("Finalising TAR file");
+        log_debug("Finalising TAR file in %s", recordingPath.c_str());
         mtar_finalize(&tarfile);
         mtar_close(&tarfile);
     } else {
