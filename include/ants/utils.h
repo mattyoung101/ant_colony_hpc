@@ -5,6 +5,7 @@
 #include <functional>
 #include <string>
 #include <ostream>
+#include <cmath>
 
 /// Divide to convert bytes to MiB
 #define BYTES2MIB 1048576
@@ -97,6 +98,25 @@ namespace ants {
 
         bool operator>=(const Vector2i &rhs) const {
             return !(*this < rhs);
+        }
+
+        // These functions inspired by libGDX Vector2:
+        // https://github.com/libgdx/libgdx/blob/master/gdx/src/com/badlogic/gdx/math/Vector2.java
+
+        /// Cross product with this vector and another vector
+        [[nodiscard]] int32_t crs(Vector2i other) const {
+            return x * other.y - y * other.x;
+        }
+
+        /// Chebyshev distance between this and another vector
+        [[nodiscard]] int32_t distance(Vector2i other) const {
+            // https://en.wikipedia.org/wiki/Chebyshev_distance#Definition
+            return std::max(std::abs(other.x - x), std::abs(other.y - y));
+        }
+
+        /// Angle between this vector and another, in radians
+        [[nodiscard]] double angle(Vector2i other) const {
+
         }
     };
 

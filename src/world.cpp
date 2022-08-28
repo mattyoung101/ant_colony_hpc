@@ -18,8 +18,8 @@
 
 /// Macro to assist in freeing grids
 #define DELETE_GRID(grid) do { \
-for (uint32_t y = 0; y < height; y++) { \
-    for (uint32_t x = 0; x < width; x++) { \
+for (int y = 0; y < height; y++) { \
+    for (int  x = 0; x < width; x++) { \
         delete (grid)[y][x]; \
     } \
     delete[] (grid)[y]; \
@@ -116,7 +116,7 @@ World::~World() {
     // delete grid
     DELETE_GRID(foodGrid)
     DELETE_GRID(pheromoneGrid)
-    for (uint32_t y = 0; y < height; y++) {
+    for (int y = 0; y < height; y++) {
         delete[] obstacleGrid[y];
     }
     delete[] obstacleGrid;
@@ -162,35 +162,63 @@ void World::writeRecordingStatistics(uint32_t numTicks, TimeInfo wallTime, TimeI
     mtar_write_data(&tarfile, str.c_str(), str.length());
 }
 
-template <class T>
-static inline constexpr T clamp(T value, T min, T max) {
-    if (value > max) {
-        return max;
-    } else if (value < min) {
-        return min;
-    } else {
-        return value;
-    }
+/// See ant_navigation.md. Normalised distance to food vs. noise/signal mix factor.
+static inline constexpr double distanceLookup(double x) {
+    // https://www.desmos.com/calculator/ahhuapmo5s
+    double g = 1.55;
+    double k = 0.2;
+    double y = k * exp(g * x);
+    return std::clamp(y, 0.0, 1.0);
 }
 
-/// See ant_navigation.md. Normalised distance to food vs. noise/data mix factor.
-static inline constexpr double distanceLookup(double x) {
-    double g = 2.3;
-    double k = 0.2;
-    return k * exp(g * x);
+/// Quantizes a rotation in radians to an integer offset (e.g. 0 rad = 1,0)
+static Vector2i quantizeRotation(double angle) {
+    // treat as unit polar vector, convert to cartesian vector
+    // just the old $r \cos{\theta}$, $r \sin{\theta}$
+    double x = 1.0 * cos(angle);
+    double y = 1.0 * sin(angle);
+    // quantize
+    return {static_cast<int32_t>(round(x)), static_cast<int32_t>(round(y))};
+}
+
+// good target for optimisation
+std::pair<double, Vector2i> World::findNearestFood(const Vector2i &pos) const {
+    int minDist = INT32_MAX - 1;
+    Vector2i minPos{};
+
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < height; x++) {
+            auto foodPos = Vector2i(x, y);
+            int foodDist = foodPos.distance(foodPos);
+
+            if (foodDist <= minDist) {
+                minDist = foodDist;
+                minPos = foodPos;
+            }
+        }
+    }
+    return std::make_pair(minDist, minPos);
 }
 
 void World::update() noexcept {
-    std::uniform_int_distribution<int> dist(-1, 1);
+    // random angle between 0 and 2pi
+    std::uniform_real_distribution<double> angleNoiseDist(0, M_PI * 2.0);
+    double maxDist = static_cast<double>(Vector2i(0, 0).distance(Vector2i(width, height)));
 
     for (auto &colony: colonies) {
         for (auto &ant: colony.ants) {
-            // move ants by random amount
-            int yOffset = dist(rng);
-            int xOffset = dist(rng);
+            // steer ant towards food (with a bit of randomness)
+            // see ant_navigation.md for full implementation details
+            auto [closestFoodDist, closestFoodPos] = findNearestFood(ant.pos);
+            auto normalisedDist = static_cast<double>(closestFoodDist) / maxDist;
+            auto noiseMix = distanceLookup(normalisedDist);
+            auto signalMix = 1.0 - noiseMix;
 
-            int32_t newX = ant.pos.x + xOffset;
-            int32_t newY = ant.pos.y + yOffset;
+            auto noise = angleNoiseDist(rng);
+            // TODO signal part
+
+            int32_t newX = ant.pos.x + 0;
+            int32_t newY = ant.pos.y + 0;
 
             // only move the ant if it wouldn't intersect an obstacle, and is in bounds
             if (newX < 0 || newY < 0 || newX >= static_cast<int32_t>(width) ||
@@ -221,8 +249,8 @@ std::vector<uint8_t> World::renderWorldUncompressed() const {
     out.reserve(width * height * 3);
 
     // render world
-    for (uint32_t y = 0; y < height; y++) {
-        for (uint32_t x = 0; x < width; x++) {
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
             if (foodGrid[y][x] != nullptr) {
                 // pixel is food, output green
                 out.push_back(0); // R

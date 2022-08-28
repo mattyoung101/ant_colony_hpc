@@ -17,9 +17,9 @@
 namespace ants {
     struct World {
         /// Grid sizes
-        uint32_t width{};
+        int32_t width{};
         /// Grid sizes
-        uint32_t height{};
+        int32_t height{};
 
         /// Instantiates a world from the given PNG file as per specifications
         explicit World(const std::string &filename, mINI::INIStructure config);
@@ -57,8 +57,16 @@ namespace ants {
         /// Finalises the PNG TAR recording. Must be called before program exit.
         void finaliseRecording();
 
-        /// Renders the world to an uncompressed RGB pixel buffer
+        /// Renders the current world to an uncompressed RGB pixel buffer.
         [[nodiscard]] std::vector<uint8_t> renderWorldUncompressed() const;
+
+        /**
+         * Finds the distance to the nearest food tile, from pos. Distance metric is Cheybshev
+         * distance.
+         * @param pos input position
+         * @return pair: distance, position of food tile
+         */
+        [[nodiscard]] std::pair<double, Vector2i> findNearestFood(const Vector2i &pos) const;
 
     private:
         /// Grid of food tiles
