@@ -100,23 +100,28 @@ namespace ants {
             return !(*this < rhs);
         }
 
-        // These functions inspired by libGDX Vector2:
-        // https://github.com/libgdx/libgdx/blob/master/gdx/src/com/badlogic/gdx/math/Vector2.java
-
-        /// Cross product with this vector and another vector
-        [[nodiscard]] int32_t crs(Vector2i other) const {
-            return x * other.y - y * other.x;
-        }
-
         /// Chebyshev distance between this and another vector
         [[nodiscard]] int32_t distance(Vector2i other) const {
             // https://en.wikipedia.org/wiki/Chebyshev_distance#Definition
             return std::max(std::abs(other.x - x), std::abs(other.y - y));
         }
 
-        /// Angle between this vector and another, in radians
-        [[nodiscard]] double angle(Vector2i other) const {
+        Vector2i operator-(const Vector2i &other) const {
+            return {x - other.x, y - other.y};
+        }
 
+        /// Normalises this vector and returns a new vector
+        [[nodiscard]] Vector2i norm() const {
+            // instead of Euclidean distance, take the Chebyshev distance as the norm since we are
+            // on a grid
+            // this is absolutely critical to making it work!!! for some reason
+            auto len = static_cast<double>(std::max(std::abs(x), std::abs(y)));
+            if (len != 0) {
+                auto x2 = x / static_cast<int>(round(len));
+                auto y2 = y / static_cast<int>(round(len));
+                return {x2, y2};
+            }
+            return {0, 0}; // hack, stupid, should fix
         }
     };
 

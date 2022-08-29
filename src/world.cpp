@@ -162,38 +162,52 @@ void World::writeRecordingStatistics(uint32_t numTicks, TimeInfo wallTime, TimeI
     mtar_write_data(&tarfile, str.c_str(), str.length());
 }
 
-/// See ant_navigation.md. Normalised distance to food vs. noise/signal mix factor.
+/// See ant_navigation.md. Normalised distance to chance of moving in the right direction.
 static inline constexpr double distanceLookup(double x) {
-    // https://www.desmos.com/calculator/ahhuapmo5s
-    double g = 1.55;
+    // https://www.desmos.com/calculator/jrir9ivnnt
+    double g = 1.1;
     double k = 0.2;
     double y = k * exp(g * x);
     return std::clamp(y, 0.0, 1.0);
 }
 
-/// Quantizes a rotation in radians to an integer offset (e.g. 0 rad = 1,0)
-static Vector2i quantizeRotation(double angle) {
-    // treat as unit polar vector, convert to cartesian vector
-    // just the old $r \cos{\theta}$, $r \sin{\theta}$
-    double x = 1.0 * cos(angle);
-    double y = 1.0 * sin(angle);
-    // quantize
-    return {static_cast<int32_t>(round(x)), static_cast<int32_t>(round(y))};
+Vector2i World::randomMovementVector() {
+    std::uniform_int_distribution<int> positionDist(-1, 1);
+//    while (true) {
+//        auto x = positionDist(rng);
+//        auto y = positionDist(rng);
+//        if (x != 0 && y != 0) {
+//            // we're good, return the result
+//            return {x, y};
+//        }
+//        // if we got here: bad luck, we ended up with (0,0) and have to regenerate
+//    }
+
+    // we actually get better looking random movement by allowing the ant to do (0,0) sometimes
+    // without that, it looks kinda robotic
+    return {positionDist(rng), positionDist(rng)};
 }
 
 // good target for optimisation
 std::pair<double, Vector2i> World::findNearestFood(const Vector2i &pos) const {
-    int minDist = INT32_MAX - 1;
+    int minDist = 999999;
     Vector2i minPos{};
 
+    // loop over each food element and check if it's closer to the ant than the previously recorded one
     for (int y = 0; y < height; y++) {
-        for (int x = 0; x < height; x++) {
-            auto foodPos = Vector2i(x, y);
-            int foodDist = foodPos.distance(foodPos);
+        for (int x = 0; x < width; x++) {
+            // FIXME make foodGrid a grid of bools (we don't use remaining uses)
+            if (foodGrid[y][x] == nullptr) {
+                // no food here
+                continue;
+            }
+            // food here, let's see if it's closer
+            auto newPos = Vector2i(x, y);
+            int newDist = newPos.distance(pos);
 
-            if (foodDist <= minDist) {
-                minDist = foodDist;
-                minPos = foodPos;
+            if (newDist <= minDist) {
+                minDist = newDist;
+                minPos = newPos;
             }
         }
     }
@@ -202,23 +216,32 @@ std::pair<double, Vector2i> World::findNearestFood(const Vector2i &pos) const {
 
 void World::update() noexcept {
     // random angle between 0 and 2pi
-    std::uniform_real_distribution<double> angleNoiseDist(0, M_PI * 2.0);
+    std::uniform_real_distribution<double> moveChance(0.0, 1.0);
     double maxDist = static_cast<double>(Vector2i(0, 0).distance(Vector2i(width, height)));
 
     for (auto &colony: colonies) {
         for (auto &ant: colony.ants) {
             // steer ant towards food (with a bit of randomness)
             // see ant_navigation.md for full implementation details
-            auto [closestFoodDist, closestFoodPos] = findNearestFood(ant.pos);
-            auto normalisedDist = static_cast<double>(closestFoodDist) / maxDist;
-            auto noiseMix = distanceLookup(normalisedDist);
-            auto signalMix = 1.0 - noiseMix;
+            auto [foodDist, foodPos] = findNearestFood(ant.pos);
+            auto normalisedDist = static_cast<double>(foodDist) / maxDist;
 
-            auto noise = angleNoiseDist(rng);
-            // TODO signal part
+            // probability of moving in the right direction (towards the nearest food)
+            auto probability = distanceLookup(normalisedDist);
+            // movement vector that corresponds with a compass direction (e.g. (1,1) = NE)
+            Vector2i movement{};
 
-            int32_t newX = ant.pos.x + 0;
-            int32_t newY = ant.pos.y + 0;
+            if (moveChance(rng) <= probability) {
+                // we're in luck, move in the right direction
+                movement = (foodPos - ant.pos).norm();
+            } else {
+                // bad luck, move in a noisy direction
+                movement = randomMovementVector();
+            }
+
+            // apply movement vector
+            int32_t newX = ant.pos.x + movement.x;
+            int32_t newY = ant.pos.y + movement.y;
 
             // only move the ant if it wouldn't intersect an obstacle, and is in bounds
             if (newX < 0 || newY < 0 || newX >= static_cast<int32_t>(width) ||

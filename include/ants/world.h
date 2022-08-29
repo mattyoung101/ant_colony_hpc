@@ -68,6 +68,9 @@ namespace ants {
          */
         [[nodiscard]] std::pair<double, Vector2i> findNearestFood(const Vector2i &pos) const;
 
+        /// Returns a random vector bewteen (-1,1) that is not (0,0)
+        Vector2i randomMovementVector();
+
     private:
         /// Grid of food tiles
         Food ***foodGrid{};
