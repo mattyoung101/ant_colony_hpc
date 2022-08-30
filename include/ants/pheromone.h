@@ -4,6 +4,7 @@
 
 namespace ants {
     struct Pheromone {
+        // TODO hashmap with (colony -> {to food strength, to colony strength})
         double value{};
     };
 };

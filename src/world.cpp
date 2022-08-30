@@ -7,6 +7,7 @@
 #include <set>
 #include <unordered_map>
 #include <random>
+#include <chrono>
 #include "ants/world.h"
 #include "stb/stb_image.h"
 #include "stb/stb_image_write.h"
@@ -49,7 +50,16 @@ World::World(const std::string& filename, mINI::INIStructure config) {
 
     // mapping between each unique colour and its position
     std::unordered_map<RGBColour, Vector2i> uniqueColours{};
-    rng = XoshiroCpp::Xoshiro256StarStar(std::stoi(config["Simulation"]["rng_seed"]));
+
+    // construct Xoshiro256** RNG - a fast and high quality PRNG
+    auto rngSeed = std::stol(config["Simulation"]["rng_seed"]);
+    if (rngSeed == 0) {
+        // as per config file, use an unpredictable source, in this case, time since unix epoch in nanoseconds
+        auto now = std::chrono::system_clock::now().time_since_epoch();
+        rngSeed = std::chrono::duration_cast<std::chrono::nanoseconds>(now).count();
+    }
+    log_debug("RNG seed is: %ld", rngSeed);
+    rng = XoshiroCpp::Xoshiro256StarStar(rngSeed);
 
     for (int32_t y = 0; y < imgHeight; y++) {
         auto **foodRow = new Food*[width]{};
@@ -169,6 +179,8 @@ static inline constexpr double distanceLookup(double x) {
     double k = 0.2;
     double y = k * exp(g * x);
     return std::clamp(y, 0.0, 1.0);
+
+//    return std::clamp(0.45 * sin(1.0/x) + 0.5, 0.0, 1.0);
 }
 
 Vector2i World::randomMovementVector() {

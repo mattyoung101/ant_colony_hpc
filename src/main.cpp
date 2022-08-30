@@ -29,9 +29,9 @@ struct ImageContext {
 
 // for stbi_write
 // the context pointer is the world instance
-static void write_func(void *context, void *data, int size) {
+static void writeFunc(void *context, void *data, int size) {
     auto imageContext = static_cast<ImageContext*>(context);
-    log_trace("Writing %zu bytes to file in TAR %s", size, imageContext->filename.c_str());
+    log_trace("Writing %d bytes to file in TAR %s", size, imageContext->filename.c_str());
     imageContext->world.writeToTar(imageContext->filename, static_cast<uint8_t*>(data), size);
 }
 
@@ -99,7 +99,7 @@ int main() {
             int w = static_cast<int>(world.width);
             int h = static_cast<int>(world.height);
             // source: https://solarianprogrammer.com/2019/06/10/c-programming-reading-writing-images-stb_image-libraries/
-            stbi_write_png_to_func(write_func, &context, w, h, 3, image.data(), w * 3);
+            stbi_write_png_to_func(writeFunc, &context, w, h, 3, image.data(), w * 3);
         }
         log_info("Uncompressed image RAM usage was %zu MiB", totalBytes / BYTES2MIB);
     }
