@@ -13,6 +13,7 @@
 #include "xoroshiro/XoroshiroCpp.h"
 #include "mini/ini.h"
 #include "tinycolor/tinycolormap.hpp"
+#include "pcg/pcg_random.hpp"
 
 namespace ants {
     struct World {
@@ -82,7 +83,7 @@ namespace ants {
         std::vector<Colony> colonies{};
 
         /// PRNG
-        XoshiroCpp::Xoshiro256StarStar rng{};
+        pcg64_fast rng{};
 
         /// PNG TAR output file
         mtar_t tarfile{};

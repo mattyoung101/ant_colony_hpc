@@ -59,7 +59,8 @@ World::World(const std::string& filename, mINI::INIStructure config) {
         rngSeed = std::chrono::duration_cast<std::chrono::nanoseconds>(now).count();
     }
     log_debug("RNG seed is: %ld", rngSeed);
-    rng = XoshiroCpp::Xoshiro256StarStar(rngSeed);
+    rng.seed(rngSeed);
+    // TODO test PCG by filling pheromones with random
 
     for (int32_t y = 0; y < imgHeight; y++) {
         auto **foodRow = new Food*[width]{};
@@ -167,6 +168,8 @@ void World::writeRecordingStatistics(uint32_t numTicks, TimeInfo wallTime, TimeI
            "Wall time: " << wallTime << "\n"
            "Sim time: " << simTime << "\n";
     // clang-format on
+    oss << "\n========== INI config used ==========\n";
+    // TODO dump INI config to file as well
     auto str = oss.str();
     mtar_write_file_header(&tarfile, "stats.txt", str.length());
     mtar_write_data(&tarfile, str.c_str(), str.length());
@@ -185,16 +188,6 @@ static inline constexpr double distanceLookup(double x) {
 
 Vector2i World::randomMovementVector() {
     std::uniform_int_distribution<int> positionDist(-1, 1);
-//    while (true) {
-//        auto x = positionDist(rng);
-//        auto y = positionDist(rng);
-//        if (x != 0 && y != 0) {
-//            // we're good, return the result
-//            return {x, y};
-//        }
-//        // if we got here: bad luck, we ended up with (0,0) and have to regenerate
-//    }
-
     // we actually get better looking random movement by allowing the ant to do (0,0) sometimes
     // without that, it looks kinda robotic
     return {positionDist(rng), positionDist(rng)};
@@ -321,7 +314,7 @@ std::vector<uint8_t> World::renderWorldUncompressed() const {
             p[1] = colony.colour.g;
             p[2] = colony.colour.b;
         }
-        // TODO draw colony as a circle
+        // TODO draw colony as a circle (?)
     }
 
     return out;
