@@ -12,7 +12,6 @@
 #include "stb/stb_image.h"
 #include "stb/stb_image_write.h"
 #include "ants/colony.h"
-#include "ants/food.h"
 #include "ants/ant.h"
 #include "log/log.h"
 #include "tinycolor/tinycolormap.hpp"
@@ -44,14 +43,14 @@ World::World(const std::string& filename, mINI::INIStructure config) {
     height = imgHeight;
 
     // construct grids, initialised with nullptr: https://stackoverflow.com/a/2204380/5007892
-    foodGrid = new Food**[height]{};
+    foodGrid = new bool*[height]{};
     pheromoneGrid = new Pheromone**[height]{};
     obstacleGrid = new bool*[height]{};
 
     // mapping between each unique colour and its position
     std::unordered_map<RGBColour, Vector2i> uniqueColours{};
 
-    // construct Xoshiro256** RNG - a fast and high quality PRNG
+    // seed the PCG RNG
     auto rngSeed = std::stol(config["Simulation"]["rng_seed"]);
     if (rngSeed == 0) {
         // as per config file, use an unpredictable source, in this case, time since unix epoch in nanoseconds
@@ -60,10 +59,9 @@ World::World(const std::string& filename, mINI::INIStructure config) {
     }
     log_debug("RNG seed is: %ld", rngSeed);
     rng.seed(rngSeed);
-    // TODO test PCG by filling pheromones with random
 
     for (int32_t y = 0; y < imgHeight; y++) {
-        auto **foodRow = new Food*[width]{};
+        auto *foodRow = new bool[width]{};
         auto **pheromoneRow = new Pheromone*[width]{};
         auto *obstacleRow = new bool[width]{};
 
@@ -82,7 +80,7 @@ World::World(const std::string& filename, mINI::INIStructure config) {
                 continue;
             } else if (r == 0 && g == 255 && b == 0) {
                 // green, food
-                foodRow[x] = new Food();
+                foodRow[x] = true;
             } else if (r == 128 && g == 128 && b == 128) {
                 // grey, obstacle
                 obstacleRow[x] = true;
@@ -125,10 +123,12 @@ World::World(const std::string& filename, mINI::INIStructure config) {
 
 World::~World() {
     // delete grid
-    DELETE_GRID(foodGrid)
     DELETE_GRID(pheromoneGrid)
     for (int y = 0; y < height; y++) {
         delete[] obstacleGrid[y];
+    }
+    for (int y = 0; y < height; y++) {
+        delete[] foodGrid[y];
     }
     delete[] obstacleGrid;
 }
@@ -201,8 +201,7 @@ std::pair<double, Vector2i> World::findNearestFood(const Vector2i &pos) const {
     // loop over each food element and check if it's closer to the ant than the previously recorded one
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
-            // FIXME make foodGrid a grid of bools (we don't use remaining uses)
-            if (foodGrid[y][x] == nullptr) {
+            if (!foodGrid[y][x]) {
                 // no food here
                 continue;
             }
@@ -222,6 +221,7 @@ std::pair<double, Vector2i> World::findNearestFood(const Vector2i &pos) const {
 void World::update() noexcept {
     // random angle between 0 and 2pi
     std::uniform_real_distribution<double> moveChance(0.0, 1.0);
+    // FIXME should pre-calculate this
     double maxDist = static_cast<double>(Vector2i(0, 0).distance(Vector2i(width, height)));
 
     for (auto &colony: colonies) {
@@ -279,7 +279,7 @@ std::vector<uint8_t> World::renderWorldUncompressed() const {
     // render world
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
-            if (foodGrid[y][x] != nullptr) {
+            if (foodGrid[y][x]) {
                 // pixel is food, output green
                 out.push_back(0); // R
                 out.push_back(255); // G

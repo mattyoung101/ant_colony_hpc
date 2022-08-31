@@ -43,7 +43,7 @@ The following open source libraries are used:
 - [stb_image_write](https://github.com/nothings/stb/blob/master/stb_image_write.h): image writing library: Public domain
 - [mINI](https://github.com/pulzed/mINI): INI config parsing library: MIT licence
 - [microtar](https://github.com/rxi/microtar): TAR IO library for C: MIT licence
-- [XoroshiroCpp](https://github.com/Reputeless/Xoshiro-cpp): C++ implementation of the Xoshiro PRNG algorithm: MIT licence
+- [pcg-cpp](https://github.com/imneme/pcg-cpp): C++ implementation of the high-quality PCG RNG algorithm: Apache 2.0 licence
 - [tinycolormap](https://github.com/yuki-koyama/tinycolormap): Matplotlib colour maps in C++: MIT licence
 
 ## Licence

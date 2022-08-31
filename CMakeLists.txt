@@ -9,7 +9,8 @@ set(CMAKE_C_STANDARD 11)
 add_compile_options(-Wall -Wextra -Wno-unused-parameter -Wno-unused-variable -g3)
 # only supported under clang, but should be faster and allegedly better
 # for mold install instructions, see: https://github.com/rui314/mold
-add_link_options(-fuse-ld=mold)
+# ---------- uncomment this if you're cool and want to compile mold, otherwise leave out ----------
+#add_link_options(-fuse-ld=mold)
 
 # Optimisation
 if ("${CMAKE_BUILD_TYPE}" STREQUAL "Release")
@@ -21,6 +22,10 @@ if ("${CMAKE_BUILD_TYPE}" STREQUAL "Release")
     # TODO get the right mtune as well
     add_compile_options(-O3 -march=x86-64-v2 -flto -static)
     add_link_options(-flto -static)
+elseif("${CMAKE_BUILD_TYPE}" STREQUAL "Profile")
+    message(STATUS "Profile build, enabling gprof")
+    add_compile_options(-O0 -pg -flto -static)
+    add_link_options(-flto -pg -static)
 else()
     message(STATUS "Debug build, enabling sanitizers")
     add_compile_options(-O0 -fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer)

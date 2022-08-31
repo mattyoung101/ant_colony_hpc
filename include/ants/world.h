@@ -6,10 +6,8 @@
 #include <vector>
 #include "microtar/microtar.h"
 #include "ants/colony.h"
-#include "ants/food.h"
 #include "ants/colony.h"
 #include "ants/pheromone.h"
-#include "ants/food.h"
 #include "xoroshiro/XoroshiroCpp.h"
 #include "mini/ini.h"
 #include "tinycolor/tinycolormap.hpp"
@@ -74,7 +72,7 @@ namespace ants {
 
     private:
         /// Grid of food tiles
-        Food ***foodGrid{};
+        bool **foodGrid{};
         /// Grid of pheromone tiles
         Pheromone ***pheromoneGrid{};
         /// Grid of obstacles
@@ -82,7 +80,8 @@ namespace ants {
         /// List of colonies
         std::vector<Colony> colonies{};
 
-        /// PRNG
+        /// PRNG: we use PCG, and pcg64_fast, which doesn't say it has any worse statistical quality
+        /// than pcg64, and has plenty large state for our use case
         pcg64_fast rng{};
 
         /// PNG TAR output file

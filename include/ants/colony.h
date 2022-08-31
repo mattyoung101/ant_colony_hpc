@@ -17,3 +17,5 @@ namespace ants {
         std::vector<Ant> ants{};
     };
 };
+
+// TODO hash code
