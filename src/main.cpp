@@ -47,6 +47,7 @@ int main() {
         throw std::runtime_error("Failed to load antconfig.ini, check your working dir");
     }
 
+
     // load the world into memory
     auto world = World(config["Simulation"]["grid_file"], config);
 

@@ -15,7 +15,7 @@ namespace ants {
         Vector2i pos{};
         /// Ants in the colony
         std::vector<Ant> ants{};
+        /// Unique colony ID
+        uint32_t id{};
     };
 };
-
-// TODO hash code

@@ -8,7 +8,6 @@
 #include "ants/colony.h"
 #include "ants/colony.h"
 #include "ants/pheromone.h"
-#include "xoroshiro/XoroshiroCpp.h"
 #include "mini/ini.h"
 #include "tinycolor/tinycolormap.hpp"
 #include "pcg/pcg_random.hpp"
@@ -83,6 +82,10 @@ namespace ants {
         /// PRNG: we use PCG, and pcg64_fast, which doesn't say it has any worse statistical quality
         /// than pcg64, and has plenty large state for our use case
         pcg64_fast rng{};
+
+        /// INI values
+        double pheromoneDecayFactor{};
+        double pheromoneGainFactor{};
 
         /// PNG TAR output file
         mtar_t tarfile{};

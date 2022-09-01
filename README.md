@@ -1,5 +1,5 @@
 # COSC3500 Ant Simulation Project
-This is the ant simulation project I'm writing for COSC3500. It's written in C++20 and will be optimised
+This is the ant simulation project I'm writing for COSC3500. It's written in C++17 and will be optimised
 as much as possible over the duration of the course.
 
 Author: Matt Young (m.young2@uqconnect.edu.au)
@@ -22,15 +22,16 @@ See the docs folder for most of this.
 TODO document some in here
 
 ## Building and running
+### Compiling on getafix
+1. Add GCC 10: `module load gnu/10.2.1`
+2. TODO instructions for making all the cmake builds
+3. Compile: `make -j16`
+4. Run: `./ant_colony`
+
+### General instructions
 Compile with at least Clang 12 (preferred), GCC 10, or later. The latest available version of CMake
 is recommended. If I end up adding PGO, you may need to change some compiler options to get PGO working
 in GCC.
-
-Debug and Release targets are supported in CMake. The Release target is designed to run on UQ SMP's
-_getafix_ "high"-performance computing training server, which runs a decade old Intel CPU, so it uses
-a particular march flag for this. It is also statically linked for similar reasons (getafix ships a decade
-old CPU and decade old gcc version, so no compiling on there). The Debug target enables AddressSanitizer
-and UndefinedBehaviourSanitizer and is slow for that reason.
 
 Make sure that antconfig.ini, maps/, and results/ and the ant_colony executable are in your working
 directory. Then run ant_colony and it will do the rest. Feel free to take a look at antconfig.ini
@@ -47,4 +48,4 @@ The following open source libraries are used:
 - [tinycolormap](https://github.com/yuki-koyama/tinycolormap): Matplotlib colour maps in C++: MIT licence
 
 ## Licence
-Currently proprietary until the course is done.
+Currently proprietary until the course is done. Hopefully eventually MPL 2.0.

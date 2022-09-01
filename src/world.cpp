@@ -99,16 +99,19 @@ World::World(const std::string& filename, mINI::INIStructure config) {
     log_debug("Have %zu unique colours (unique colonies)", uniqueColours.size());
 
     // setup colonies
+    int c = 0;
+    int numAnts = std::stoi(config["Colony"]["starting_ants"]);
     for (const auto &pair : uniqueColours) {
         auto [colour, pos] = pair;
-        log_debug("Colony colour (%d,%d,%d) at %d,%d", colour.r, colour.g, colour.b, pos.x, pos.y);
-
         Colony colony{};
         colony.colour = colour;
         colony.pos = pos;
+        colony.id = c++;
+
+        log_debug("Colony colour (%d,%d,%d) at %d,%d (id %d)", colour.r, colour.g, colour.b, pos.x,
+                  pos.y, colony.id);
 
         // add starting ants
-        int numAnts = std::stoi(config["Colony"]["starting_ants"]);
         for (int i = 0; i < numAnts; i++) {
             Ant ant{};
             // ant starts at the centre of colony
@@ -117,6 +120,20 @@ World::World(const std::string& filename, mINI::INIStructure config) {
         }
         colonies.emplace_back(colony);
     }
+
+    // fix up pheromone grid using knowledge from above: each pheromone needs to have a reference to
+    // each colony we have
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            for (size_t colony = 0; colony < uniqueColours.size(); colony++) {
+                pheromoneGrid[y][x]->values.emplace_back(PheromoneStrength());
+            }
+        }
+    }
+
+    // load INI values
+    pheromoneDecayFactor = std::stod(config["Pheromones"]["decay_factor"]);
+    pheromoneGainFactor = std::stod(config["Pheromones"]["gain_factor"]);
 
     stbi_image_free(image);
 }
@@ -195,7 +212,7 @@ Vector2i World::randomMovementVector() {
 
 // good target for optimisation
 std::pair<double, Vector2i> World::findNearestFood(const Vector2i &pos) const {
-    int minDist = 999999;
+    int minDist = INT32_MAX - 1;
     Vector2i minPos{};
 
     // loop over each food element and check if it's closer to the ant than the previously recorded one
@@ -224,6 +241,21 @@ void World::update() noexcept {
     // FIXME should pre-calculate this
     double maxDist = static_cast<double>(Vector2i(0, 0).distance(Vector2i(width, height)));
 
+    // decay pheromones not in use
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            for (auto &value : pheromoneGrid[y][x]->values) {
+                value.toColony -= pheromoneDecayFactor;
+                value.toFood -= pheromoneDecayFactor;
+
+                // clamp so it doesn't go below zero
+                value.toColony = std::clamp(value.toColony, 0.0, 1.0);
+                value.toFood = std::clamp(value.toFood, 0.0, 1.0);
+            }
+        }
+    }
+
+    // update the ants
     for (auto &colony: colonies) {
         for (auto &ant: colony.ants) {
             // steer ant towards food (with a bit of randomness)
@@ -256,7 +288,8 @@ void World::update() noexcept {
 
             ant.pos.x = newX;
             ant.pos.y = newY;
-            pheromoneGrid[ant.pos.y][ant.pos.x]->value += 0.01;
+            // TODO get strength value from config
+            pheromoneGrid[ant.pos.y][ant.pos.x]->values[colony.id].toFood += 0.01;
         }
     }
 }
@@ -293,7 +326,8 @@ std::vector<uint8_t> World::renderWorldUncompressed() const {
                 // not a food or obstacle, so we'll juts write the pheromone value in the colour map
                 // we tinycolormap and matplotlib's inferno colour map to make the output more
                 // visually interesting
-                auto pheromone = pheromoneGrid[y][x]->value;
+                auto pheromone = pheromoneGrid[y][x]->getColourValue();
+
                 auto colour = tinycolormap::GetInfernoColor(pheromone);
                 out.push_back(colour.ri());
                 out.push_back(colour.gi());
