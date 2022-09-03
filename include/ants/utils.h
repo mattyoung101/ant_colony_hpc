@@ -18,7 +18,6 @@ namespace ants {
         seed ^= hasher(v) + 0x9e3779b9 + (seed<<6) + (seed>>2);
     }
 
-
     /// RGB colour
     struct RGBColour {
         uint8_t r{}, g{}, b{};
@@ -184,10 +183,24 @@ namespace std {
     {
         std::size_t operator()(const ants::RGBColour& c) const
         {
-            size_t seed = c.r;
-            ants::hashCombine(seed, c.g);
-            ants::hashCombine(seed, c.b);
-            return seed;
+            size_t hash = 0;
+            ants::hashCombine(hash, c.r);
+            ants::hashCombine(hash, c.g);
+            ants::hashCombine(hash, c.b);
+            return hash;
+        }
+    };
+
+    /// Hash for Vector2i
+    template <>
+    struct std::hash<ants::Vector2i>
+    {
+        std::size_t operator()(const ants::Vector2i& v) const
+        {
+            size_t hash = 0;
+            ants::hashCombine(hash, v.x);
+            ants::hashCombine(hash, v.y);
+            return hash;
         }
     };
 };

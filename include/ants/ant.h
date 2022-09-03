@@ -14,8 +14,11 @@ namespace ants {
     struct Ant {
         /// Current position
         Vector2i pos{};
-
         /// True if the ant is holding food
         bool holdingFood{};
+        /// True if this is an ant that was present when the game was started
+        bool isFirstGeneration{};
+        /// Preferred direction for random movement
+        Vector2i preferredDir{};
     };
 }

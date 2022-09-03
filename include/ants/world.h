@@ -66,8 +66,24 @@ namespace ants {
          */
         [[nodiscard]] std::pair<double, Vector2i> findNearestFood(const Vector2i &pos) const;
 
-        /// Returns a random vector bewteen (-1,1) that is not (0,0)
+        /// Returns a random vector between (-1,1)
         Vector2i randomMovementVector();
+
+        /// Decays pheromones in the grid
+        void decayPheromones();
+
+        /**
+         * Calculates the strongest direction vector, and its strength, based on the pheromones
+         * surrounding the ant.
+         * The output vector will depend on the mode of the ant (i.e. to food or to colony).
+         * @param searchWidth width on each side of a square to search for pheromones in; see antconfig.ini
+         * and docs/phermone_search_width_2.jpg for an explanation.
+         * @param colony colony the ant belongs to
+         * @param ant the ant to consider
+         * @return a pair: first value is the strongest direction, second value is the strength
+         */
+        [[nodiscard]] std::pair<Vector2i, double>
+        computePheromoneVector(const Colony &colony, const Ant &ant) const;
 
     private:
         /// Grid of food tiles
@@ -86,6 +102,8 @@ namespace ants {
         /// INI values
         double pheromoneDecayFactor{};
         double pheromoneGainFactor{};
+
+        double antMoveRightChance{};
 
         /// PNG TAR output file
         mtar_t tarfile{};

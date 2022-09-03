@@ -4,6 +4,11 @@
 #include <vector>
 
 namespace ants {
+    enum PheromoneDirection {
+        TO_COLONY = 0,
+        TO_FOOD,
+    };
+
     struct PheromoneStrength {
         /// Strength of this pheromone to food
         double toColony{};

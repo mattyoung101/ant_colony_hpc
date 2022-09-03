@@ -1,4 +1,6 @@
 # Ant navigation
+**THIS METHOD NO LONGER USED, A FIXED CHANCE IS USED TO MOVE ANTS**
+
 Problem: The ants move randomly, but they're not getting anywhere.
 
 We will solve this problem in a "digital signal processing" sense. We have two signals:

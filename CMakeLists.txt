@@ -1,4 +1,6 @@
-cmake_minimum_required(VERSION 3.23)
+# COSC3500 Ant Simulator build config
+# Matt Young, 2022
+cmake_minimum_required(VERSION 3.9.1)
 project(ant_colony LANGUAGES C CXX)
 
 ## Compile as C++17
@@ -20,12 +22,12 @@ if ("${CMAKE_BUILD_TYPE}" STREQUAL "Release")
     # getafix CPU is Intel Xeon E5-2660, which should be x86-64-v2 (it's a rather old CPU)
     # see: https://unix.stackexchange.com/a/631226
     # TODO get the right mtune as well
-    add_compile_options(-O3 -march=x86-64-v2 -flto -static)
-    add_link_options(-flto -static)
+    add_compile_options(-O3 -march=x86-64-v2 -flto)
+    add_link_options(-flto)
 elseif("${CMAKE_BUILD_TYPE}" STREQUAL "Profile")
     message(STATUS "Profile build, enabling gprof")
-    add_compile_options(-O0 -pg -flto -static)
-    add_link_options(-flto -pg -static)
+    add_compile_options(-O0 -pg -flto)
+    add_link_options(-flto -pg)
 else()
     message(STATUS "Debug build, enabling sanitizers")
     add_compile_options(-O0 -fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer)
@@ -35,7 +37,13 @@ endif()
 include_directories(include)
 
 # libraries
+# TODO must check this runs on moss!!!
 include_directories(lib)
 
 add_executable(ant_colony lib/log/log.c lib/log/log.h src/main.cpp src/world.cpp lib/stb/stb_image.c
-    lib/microtar/microtar.c lib/stb/stb_image_write.c src/utils.cpp lib/tinycolor/tinycolormap.hpp src/pheromone.cpp)
+    lib/microtar/microtar.c lib/stb/stb_image_write.c src/utils.cpp lib/tinycolor/tinycolormap.hpp
+    src/pheromone.cpp lib/clip/clip.cpp lib/clip/clip_x11.cpp lib/clip/image.cpp)
+
+find_package(Threads REQUIRED)
+# TODO must check this runs on getafix (specifically xcb)
+target_link_libraries(ant_colony xcb Threads::Threads)

@@ -23,7 +23,6 @@ using namespace ants;
 struct ImageContext {
     std::string filename;
     World &world;
-
     ImageContext(std::string filename, World &world) : filename(std::move(filename)), world(world) {}
 };
 
@@ -31,7 +30,7 @@ struct ImageContext {
 // the context pointer is the world instance
 static void writeFunc(void *context, void *data, int size) {
     auto imageContext = static_cast<ImageContext*>(context);
-    log_trace("Writing %d bytes to file in TAR %s", size, imageContext->filename.c_str());
+    //log_trace("Writing %d bytes to file in TAR %s", size, imageContext->filename.c_str());
     imageContext->world.writeToTar(imageContext->filename, static_cast<uint8_t*>(data), size);
 }
 
@@ -46,7 +45,6 @@ int main() {
     if (!configFile.read(config)) {
         throw std::runtime_error("Failed to load antconfig.ini, check your working dir");
     }
-
 
     // load the world into memory
     auto world = World(config["Simulation"]["grid_file"], config);

@@ -8,6 +8,8 @@
 #include <unordered_map>
 #include <random>
 #include <chrono>
+#include <unistd.h>
+#include <pwd.h>
 #include "ants/world.h"
 #include "stb/stb_image.h"
 #include "stb/stb_image_write.h"
@@ -15,6 +17,7 @@
 #include "ants/ant.h"
 #include "log/log.h"
 #include "tinycolor/tinycolormap.hpp"
+#include "clip/clip.h"
 
 /// Macro to assist in freeing grids
 #define DELETE_GRID(grid) do { \
@@ -28,6 +31,10 @@ delete[] (grid); \
 } while (0); \
 
 using namespace ants;
+
+static const Vector2i directions[] = {Vector2i(-1, -1), Vector2i(-1, 0), Vector2i(-1, 1),
+                                      Vector2i(0, -1), Vector2i(0, 1),
+                                      Vector2i(1, -1), Vector2i(1, 0), Vector2i(1, 1)};
 
 World::World(const std::string& filename, mINI::INIStructure config) {
     log_info("Creating world from PNG %s", filename.c_str());
@@ -112,10 +119,15 @@ World::World(const std::string& filename, mINI::INIStructure config) {
                   pos.y, colony.id);
 
         // add starting ants
+        std::uniform_int_distribution<int> indexDist(0, 7);
         for (int i = 0; i < numAnts; i++) {
             Ant ant{};
+            ant.isFirstGeneration = true;
+            ant.holdingFood = false;
             // ant starts at the centre of colony
             ant.pos = pos;
+            // preferred movement direction for when moving randomly
+            ant.preferredDir = directions[indexDist(rng)];
             colony.ants.emplace_back(ant);
         }
         colonies.emplace_back(colony);
@@ -134,6 +146,7 @@ World::World(const std::string& filename, mINI::INIStructure config) {
     // load INI values
     pheromoneDecayFactor = std::stod(config["Pheromones"]["decay_factor"]);
     pheromoneGainFactor = std::stod(config["Pheromones"]["gain_factor"]);
+    antMoveRightChance = std::stod(config["Ants"]["move_right_chance"]);
 
     stbi_image_free(image);
 }
@@ -148,59 +161,6 @@ World::~World() {
         delete[] foodGrid[y];
     }
     delete[] obstacleGrid;
-}
-
-static std::string generateFileName(const std::string &prefix) {
-    // get the current date https://stackoverflow.com/a/16358111/5007892
-    auto t = std::time(nullptr);
-    auto tm = *std::localtime(&t);
-    std::ostringstream oss;
-    oss << prefix << std::put_time(&tm, "ants_%d-%m-%Y_%H-%M-%S.tar");
-    return oss.str();
-}
-
-void World::setupRecording(const std::string &prefix) {
-    auto filename = generateFileName(prefix);
-    recordingPath = filename;
-
-    int err = mtar_open(&tarfile, filename.c_str(), "w");
-    if (err != 0) {
-        std::ostringstream oss;
-        oss << "Warning: Failed to create PNG TAR recording in " << filename << ": " << mtar_strerror(err) << "\n";
-        log_warn("%s", oss.str().c_str());
-    }
-
-    log_info("Opened output TAR file %s for writing", filename.c_str());
-    tarfileOk = true;
-}
-
-void World::writeRecordingStatistics(uint32_t numTicks, TimeInfo wallTime, TimeInfo simTime) {
-    if (!tarfileOk)
-        return;
-
-    std::ostringstream oss;
-    // clang-format off
-    oss << "========== Statistics ==========\n"
-           "Number of ticks: " << numTicks << "\n" <<
-           "Wall time: " << wallTime << "\n"
-           "Sim time: " << simTime << "\n";
-    // clang-format on
-    oss << "\n========== INI config used ==========\n";
-    // TODO dump INI config to file as well
-    auto str = oss.str();
-    mtar_write_file_header(&tarfile, "stats.txt", str.length());
-    mtar_write_data(&tarfile, str.c_str(), str.length());
-}
-
-/// See ant_navigation.md. Normalised distance to chance of moving in the right direction.
-static inline constexpr double distanceLookup(double x) {
-    // https://www.desmos.com/calculator/jrir9ivnnt
-    double g = 1.1;
-    double k = 0.2;
-    double y = k * exp(g * x);
-    return std::clamp(y, 0.0, 1.0);
-
-//    return std::clamp(0.45 * sin(1.0/x) + 0.5, 0.0, 1.0);
 }
 
 Vector2i World::randomMovementVector() {
@@ -235,13 +195,46 @@ std::pair<double, Vector2i> World::findNearestFood(const Vector2i &pos) const {
     return std::make_pair(minDist, minPos);
 }
 
-void World::update() noexcept {
-    // random angle between 0 and 2pi
-    std::uniform_real_distribution<double> moveChance(0.0, 1.0);
-    // FIXME should pre-calculate this
-    double maxDist = static_cast<double>(Vector2i(0, 0).distance(Vector2i(width, height)));
+std::pair<Vector2i, double>
+World::computePheromoneVector(const Colony &colony, const Ant &ant) const {
+    // FIXME don't search with searchWidth, just check ant neighbouring bounds
 
-    // decay pheromones not in use
+    std::unordered_map<Vector2i, double> strengths{};
+    for (const auto &direction : directions) {
+        int x = ant.pos.x + direction.x;
+        int y = ant.pos.y + direction.y;
+        if (x < 0 || y < 0 || x >= width || y >= height || obstacleGrid[y][x]) {
+            // out of bounds (same check as in World::update)
+            continue;
+        }
+        // TODO
+    }
+
+//    // carefully construct bounds: make sure we don't access outside the grid
+//    auto pos = ant.pos;
+//    int minY = std::clamp(pos.y - searchWidth, 0, height);
+//    int maxY = std::clamp(pos.y + searchWidth, 0, height);
+//    int minX = std::clamp(pos.x - searchWidth, 0, width);
+//    int maxX = std::clamp(pos.x + searchWidth, 0, width);
+//
+//    // FIXME could this be replaced with a convolution?
+//    // could also be weighted average, but I'm worried the diagonals will be weighted too highly then
+//
+//    std::vector<std::pair<Vector2i, PheromoneStrength>> out{};
+//    // maybe change this for loop to be a constant lookup on the diagonals and stuff
+//    for (int y = minY; y < maxY; y++) {
+//        for (int x = minX; x < maxX; x++) {
+//            // skip over the ant itself
+//            if (x == pos.x && y == pos.y) {
+//                continue;
+//            }
+//        }
+//    }
+
+    return {};
+}
+
+void World::decayPheromones() {
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
             for (auto &value : pheromoneGrid[y][x]->values) {
@@ -254,44 +247,134 @@ void World::update() noexcept {
             }
         }
     }
+}
+
+void World::update() noexcept {
+    // uniform distribution between 0 and 1, currently used for ant move chance
+    std::uniform_real_distribution<double> uniformDistribution(0.0, 1.0);
+    // could pre-calculate this to save like 1 nanosecond
+    double maxDist = static_cast<double>(Vector2i(0, 0).distance(Vector2i(width, height)));
+
+    // decay pheromones not in use
+    decayPheromones();
 
     // update the ants
-    for (auto &colony: colonies) {
-        for (auto &ant: colony.ants) {
-            // steer ant towards food (with a bit of randomness)
-            // see ant_navigation.md for full implementation details
-            auto [foodDist, foodPos] = findNearestFood(ant.pos);
-            auto normalisedDist = static_cast<double>(foodDist) / maxDist;
+    for (auto colony = colonies.begin(); colony != colonies.end() ; ) {
+        for (auto &ant: colony->ants) {
+            // position the ant might move to
+            auto newX = ant.pos.x;
+            auto newY = ant.pos.y;
 
-            // probability of moving in the right direction (towards the nearest food)
-            auto probability = distanceLookup(normalisedDist);
-            // movement vector that corresponds with a compass direction (e.g. (1,1) = NE)
-            Vector2i movement{};
+            // TODO we should kill off ants that haven't touched food in like >n ticks
 
-            if (moveChance(rng) <= probability) {
-                // we're in luck, move in the right direction
-                movement = (foodPos - ant.pos).norm();
+            if (!ant.holdingFood) {
+                // ant is not holding food: we want to get to food
+
+                // first, see what pheromones are around the ant
+                auto [phVector, phStrength] = computePheromoneVector(*colony, ant);
+
+                // steer ant towards food (with a bit of randomness)
+                // see ant_navigation.md for full implementation details
+                auto [foodDist, foodPos] = findNearestFood(ant.pos);
+
+                // probability of moving in the right direction (towards the nearest food)
+                auto probability = antMoveRightChance;
+                // movement vector that corresponds with a compass direction (e.g. (1,1) = NE)
+                Vector2i movement{};
+
+                if (uniformDistribution(rng) <= probability) {
+                    // we're in luck, move in the right direction
+                    movement = (foodPos - ant.pos).norm();
+                } else {
+                    // bad luck, move in a noisy direction
+                    movement = randomMovementVector();
+                }
+                // apply movement vector
+                newX += movement.x;
+                newY += movement.y;
             } else {
-                // bad luck, move in a noisy direction
-                movement = randomMovementVector();
+                // ant is holding food: we want to go back to the colony
+                // TODO
             }
 
-            // apply movement vector
-            int32_t newX = ant.pos.x + movement.x;
-            int32_t newY = ant.pos.y + movement.y;
-
             // only move the ant if it wouldn't intersect an obstacle, and is in bounds
-            if (newX < 0 || newY < 0 || newX >= static_cast<int32_t>(width) ||
-                    newY >= static_cast<int32_t>(height) || obstacleGrid[newY][newX]) {
+            if (newX < 0 || newY < 0 || newX >= width || newY >= height || obstacleGrid[newY][newX]) {
                 continue;
             }
 
+            // checks passed, so update the ant data
             ant.pos.x = newX;
             ant.pos.y = newY;
-            // TODO get strength value from config
-            pheromoneGrid[ant.pos.y][ant.pos.x]->values[colony.id].toFood += 0.01;
+
+            // update world
+            // FIXME this should depend on ant mode (if it's looking for food or going home)
+            pheromoneGrid[ant.pos.y][ant.pos.x]->values[colony->id].toFood += pheromoneGainFactor;
+
+            // update ant state
+            if (!ant.holdingFood && foodGrid[ant.pos.y][ant.pos.x]) {
+                // we're on food now!
+                log_debug("Ant in colony %d just found food at %d,%d", colony->id, ant.pos.x, ant.pos.y);
+                ant.holdingFood = true;
+                // "use up" this resource in the world
+                foodGrid[ant.pos.y][ant.pos.x] = false;
+            } else if (ant.holdingFood && ant.pos.x == colony->pos.x && ant.pos.y == colony->pos.y) {
+                // got our food and returned home (on top of the colony tile)
+                log_debug("Ant in colony %d just returned home with food", colony->id);
+                ant.holdingFood = false;
+                // TODO update colony stats (hunger, have it make more ants, etc)
+            }
+        }
+
+        // update colony hunger
+        if (colony->hunger <= 0) {
+            log_debug("Colony id %d has died!", colony->id);
+            colony = colonies.erase(colony);
+        } else {
+            colony++;
         }
     }
+}
+
+static std::string generateFileName(const std::string &prefix) {
+    // get the current date https://stackoverflow.com/a/16358111/5007892
+    auto t = std::time(nullptr);
+    auto tm = *std::localtime(&t);
+    std::ostringstream oss;
+    oss << prefix << std::put_time(&tm, "ants_%d-%m-%Y_%H-%M-%S.tar");
+    return oss.str();
+}
+
+void World::setupRecording(const std::string &prefix) {
+    auto filename = generateFileName(prefix);
+    recordingPath = filename;
+
+    int err = mtar_open(&tarfile, filename.c_str(), "w");
+    if (err != 0) {
+        std::ostringstream oss;
+        oss << "Warning: Failed to create PNG TAR recording in " << filename << ": " << mtar_strerror(err) << "\n";
+        log_warn("%s", oss.str().c_str());
+    }
+
+    log_info("Opened output TAR file %s for writing", filename.c_str());
+    tarfileOk = true;
+}
+
+void World::writeRecordingStatistics(uint32_t numTicks, TimeInfo wallTime, TimeInfo simTime) {
+    if (!tarfileOk)
+        return;
+
+    std::ostringstream oss;
+    // clang-format off
+    oss << "========== Statistics ==========\n"
+           "Number of ticks: " << numTicks << "\n" <<
+        "Wall time: " << wallTime << "\n"
+                                     "Sim time: " << simTime << "\n";
+    // clang-format on
+    oss << "\n========== INI config used ==========\n";
+    // TODO dump INI config to file as well
+    auto str = oss.str();
+    mtar_write_file_header(&tarfile, "stats.txt", str.length());
+    mtar_write_data(&tarfile, str.c_str(), str.length());
 }
 
 void World::finaliseRecording() {
@@ -299,6 +382,18 @@ void World::finaliseRecording() {
         log_debug("Finalising TAR file in %s", recordingPath.c_str());
         mtar_finalize(&tarfile);
         mtar_close(&tarfile);
+
+        // if logged in as me on my development machine (not on getafix), also copy to clipboard
+        // for easy transfer to visualiser.py
+        // https://stackoverflow.com/a/8953445/5007892
+        uid_t uid = geteuid();
+        struct passwd *pw = getpwuid(uid);
+        if (pw != nullptr && strcmp(pw->pw_name, "matt") == 0) {
+            log_debug("Copied path to clipboard for development");
+            clip::set_text(recordingPath);
+        } else if (pw == nullptr) {
+            log_debug("Failed to getpwuid: %s", strerror(errno));
+        }
     } else {
         log_info("PNG TAR recording not initialised, so not being finalised");
     }
@@ -348,7 +443,6 @@ std::vector<uint8_t> World::renderWorldUncompressed() const {
             p[1] = colony.colour.g;
             p[2] = colony.colour.b;
         }
-        // TODO draw colony as a circle (?)
     }
 
     return out;
