@@ -35,6 +35,7 @@ using namespace ants;
 static const Vector2i directions[] = {Vector2i(-1, -1), Vector2i(-1, 0), Vector2i(-1, 1),
                                       Vector2i(0, -1), Vector2i(0, 1),
                                       Vector2i(1, -1), Vector2i(1, 0), Vector2i(1, 1)};
+static std::uniform_int_distribution<int> indexDist(0, 7);
 
 World::World(const std::string& filename, mINI::INIStructure config) {
     log_info("Creating world from PNG %s", filename.c_str());
@@ -119,10 +120,8 @@ World::World(const std::string& filename, mINI::INIStructure config) {
                   pos.y, colony.id);
 
         // add starting ants
-        std::uniform_int_distribution<int> indexDist(0, 7);
         for (int i = 0; i < numAnts; i++) {
             Ant ant{};
-            ant.isFirstGeneration = true;
             ant.holdingFood = false;
             // ant starts at the centre of colony
             ant.pos = pos;
@@ -147,6 +146,7 @@ World::World(const std::string& filename, mINI::INIStructure config) {
     pheromoneDecayFactor = std::stod(config["Pheromones"]["decay_factor"]);
     pheromoneGainFactor = std::stod(config["Pheromones"]["gain_factor"]);
     antMoveRightChance = std::stod(config["Ants"]["move_right_chance"]);
+    antKillNotUseful = std::stoi(config["Ants"]["kill_not_useful"]);
 
     stbi_image_free(image);
 }
@@ -197,41 +197,33 @@ std::pair<double, Vector2i> World::findNearestFood(const Vector2i &pos) const {
 
 std::pair<Vector2i, double>
 World::computePheromoneVector(const Colony &colony, const Ant &ant) const {
-    // FIXME don't search with searchWidth, just check ant neighbouring bounds
+    Vector2i bestDirection{};
+    double bestStrength = INT32_MIN + 1;
 
-    std::unordered_map<Vector2i, double> strengths{};
     for (const auto &direction : directions) {
         int x = ant.pos.x + direction.x;
         int y = ant.pos.y + direction.y;
+        // check if out of bounds (same check as in World::update)
         if (x < 0 || y < 0 || x >= width || y >= height || obstacleGrid[y][x]) {
-            // out of bounds (same check as in World::update)
             continue;
         }
-        // TODO
+
+        double strength = 0.0;
+        if (ant.holdingFood) {
+            // ant has food, use the "to colony" strength
+            strength = pheromoneGrid[y][x]->values[colony.id].toColony;
+        } else {
+            // ant doesn't have food, use the "to food" strength
+            strength = pheromoneGrid[y][x]->values[colony.id].toFood;
+        }
+
+        if (strength >= bestStrength) {
+            // new best direction!
+            bestStrength = strength;
+            bestDirection = direction;
+        }
     }
-
-//    // carefully construct bounds: make sure we don't access outside the grid
-//    auto pos = ant.pos;
-//    int minY = std::clamp(pos.y - searchWidth, 0, height);
-//    int maxY = std::clamp(pos.y + searchWidth, 0, height);
-//    int minX = std::clamp(pos.x - searchWidth, 0, width);
-//    int maxX = std::clamp(pos.x + searchWidth, 0, width);
-//
-//    // FIXME could this be replaced with a convolution?
-//    // could also be weighted average, but I'm worried the diagonals will be weighted too highly then
-//
-//    std::vector<std::pair<Vector2i, PheromoneStrength>> out{};
-//    // maybe change this for loop to be a constant lookup on the diagonals and stuff
-//    for (int y = minY; y < maxY; y++) {
-//        for (int x = minX; x < maxX; x++) {
-//            // skip over the ant itself
-//            if (x == pos.x && y == pos.y) {
-//                continue;
-//            }
-//        }
-//    }
-
-    return {};
+    return {bestDirection, bestStrength};
 }
 
 void World::decayPheromones() {
@@ -252,30 +244,24 @@ void World::decayPheromones() {
 void World::update() noexcept {
     // uniform distribution between 0 and 1, currently used for ant move chance
     std::uniform_real_distribution<double> uniformDistribution(0.0, 1.0);
-    // could pre-calculate this to save like 1 nanosecond
-    double maxDist = static_cast<double>(Vector2i(0, 0).distance(Vector2i(width, height)));
 
     // decay pheromones not in use
     decayPheromones();
 
     // update the ants
     for (auto colony = colonies.begin(); colony != colonies.end() ; ) {
-        for (auto &ant: colony->ants) {
+        for (auto ant = colony->ants.begin(); ant != colony->ants.end(); ) {
             // position the ant might move to
-            auto newX = ant.pos.x;
-            auto newY = ant.pos.y;
+            auto newX = ant->pos.x;
+            auto newY = ant->pos.y;
 
-            // TODO we should kill off ants that haven't touched food in like >n ticks
+            // FIXME do not allow walking at all on food tiles!
+            // TODO when killing ants, add some noise to the time (maybe +0 to +20 ticks extra)
 
-            if (!ant.holdingFood) {
+            if (!ant->holdingFood) {
                 // ant is not holding food: we want to get to food
-
                 // first, see what pheromones are around the ant
-                auto [phVector, phStrength] = computePheromoneVector(*colony, ant);
-
-                // steer ant towards food (with a bit of randomness)
-                // see ant_navigation.md for full implementation details
-                auto [foodDist, foodPos] = findNearestFood(ant.pos);
+                auto [phVector, phStrength] = computePheromoneVector(*colony, *ant);
 
                 // probability of moving in the right direction (towards the nearest food)
                 auto probability = antMoveRightChance;
@@ -283,8 +269,8 @@ void World::update() noexcept {
                 Vector2i movement{};
 
                 if (uniformDistribution(rng) <= probability) {
-                    // we're in luck, move in the right direction
-                    movement = (foodPos - ant.pos).norm();
+                    // move in the direction we were spawned with
+                    movement = ant->preferredDir;
                 } else {
                     // bad luck, move in a noisy direction
                     movement = randomMovementVector();
@@ -292,42 +278,87 @@ void World::update() noexcept {
                 // apply movement vector
                 newX += movement.x;
                 newY += movement.y;
+
+                // important note: we only count "ticks since last useful" when the ant is
+                // not holding food. if the ant is holding food, even if it's taking forever to get
+                // back to base, it's still considered useful.
+                ant->ticksSinceLastUseful++;
             } else {
                 // ant is holding food: we want to go back to the colony
-                // TODO
+                auto [phVector, phStrength] = computePheromoneVector(*colony, *ant);
+
+                // probability of moving in the right direction (towards the nearest food)
+                auto probability = antMoveRightChance;
+                // movement vector that corresponds with a compass direction (e.g. (1,1) = NE)
+                Vector2i movement{};
+
+                if (uniformDistribution(rng) <= probability) {
+                    // move in the direction we were spawned with
+                    movement = ant->preferredDir;
+                } else {
+                    // bad luck, move in a noisy direction
+                    movement = randomMovementVector();
+                }
+                // apply movement vector
+                newX += movement.x;
+                newY += movement.y;
             }
 
             // only move the ant if it wouldn't intersect an obstacle, and is in bounds
             if (newX < 0 || newY < 0 || newX >= width || newY >= height || obstacleGrid[newY][newX]) {
-                continue;
+                // reached an obstacle, let's try a new random movement direction
+                ant->preferredDir.x *= -1;
+                ant->preferredDir.y *= -1;
+                // don't update ant position
+            } else {
+                // checks passed, so update the ant data
+                ant->pos.x = newX;
+                ant->pos.y = newY;
             }
 
-            // checks passed, so update the ant data
-            ant.pos.x = newX;
-            ant.pos.y = newY;
-
             // update world
-            // FIXME this should depend on ant mode (if it's looking for food or going home)
-            pheromoneGrid[ant.pos.y][ant.pos.x]->values[colony->id].toFood += pheromoneGainFactor;
+            if (ant->holdingFood) {
+                // holding food, add to the "to food" strength, so we let other ants know where we
+                // found food
+                pheromoneGrid[ant->pos.y][ant->pos.x]->values[colony->id].toFood += pheromoneGainFactor;
+            } else {
+                // looking for food, update the "to colony" strength, so other ants know how to get home
+                pheromoneGrid[ant->pos.y][ant->pos.x]->values[colony->id].toColony += pheromoneGainFactor;
+            }
 
             // update ant state
-            if (!ant.holdingFood && foodGrid[ant.pos.y][ant.pos.x]) {
+            if (!ant->holdingFood && foodGrid[ant->pos.y][ant->pos.x]) {
                 // we're on food now!
-                log_debug("Ant in colony %d just found food at %d,%d", colony->id, ant.pos.x, ant.pos.y);
-                ant.holdingFood = true;
-                // "use up" this resource in the world
-                foodGrid[ant.pos.y][ant.pos.x] = false;
-            } else if (ant.holdingFood && ant.pos.x == colony->pos.x && ant.pos.y == colony->pos.y) {
+                log_debug("Ant in colony %d just found food at %d,%d", colony->id, ant->pos.x, ant->pos.y);
+                ant->holdingFood = true;
+                ant->ticksSinceLastUseful = 0;
+
+                foodGrid[ant->pos.y][ant->pos.x] = false;
+
+                // since the ant has reached food, invert its direction for heading back
+                ant->preferredDir.x *= -1;
+                ant->preferredDir.y *= -1;
+            } else if (ant->holdingFood && ant->pos.x == colony->pos.x && ant->pos.y == colony->pos.y) {
                 // got our food and returned home (on top of the colony tile)
                 log_debug("Ant in colony %d just returned home with food", colony->id);
-                ant.holdingFood = false;
+                ant->holdingFood = false;
+                ant->ticksSinceLastUseful = 0;
                 // TODO update colony stats (hunger, have it make more ants, etc)
+            }
+
+            // possibly kill this ant if its time has expired
+            if (ant->ticksSinceLastUseful > antKillNotUseful) {
+                log_debug("Ant in colony id %d has died", colony->id);
+                ant = colony->ants.erase(ant);
+            } else {
+                ant++;
             }
         }
 
-        // update colony hunger
-        if (colony->hunger <= 0) {
-            log_debug("Colony id %d has died!", colony->id);
+        // kill the colony if the hunger meter has expired, or all its ants have died
+        if (colony->hunger <= 0 || colony->ants.empty()) {
+            log_debug("Colony id %d has died! (hunger=%.2f, ants=%zu)", colony->id, colony->hunger,
+                      colony->ants.size());
             colony = colonies.erase(colony);
         } else {
             colony++;

@@ -104,6 +104,7 @@ namespace ants {
         double pheromoneGainFactor{};
 
         double antMoveRightChance{};
+        int32_t antKillNotUseful{};
 
         /// PNG TAR output file
         mtar_t tarfile{};

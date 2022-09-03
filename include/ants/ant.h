@@ -16,9 +16,9 @@ namespace ants {
         Vector2i pos{};
         /// True if the ant is holding food
         bool holdingFood{};
-        /// True if this is an ant that was present when the game was started
-        bool isFirstGeneration{};
         /// Preferred direction for random movement
         Vector2i preferredDir{};
+        /// Number of ticks since this ant last did something useful (touch food, touch colony, etc)
+        int32_t ticksSinceLastUseful{};
     };
 }
