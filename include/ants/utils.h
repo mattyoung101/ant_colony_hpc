@@ -179,7 +179,7 @@ namespace ants {
 namespace std {
     /// Hash for RGBColour
     template <>
-    struct std::hash<ants::RGBColour>
+    struct hash<ants::RGBColour>
     {
         std::size_t operator()(const ants::RGBColour& c) const
         {
@@ -193,7 +193,7 @@ namespace std {
 
     /// Hash for Vector2i
     template <>
-    struct std::hash<ants::Vector2i>
+    struct hash<ants::Vector2i>
     {
         std::size_t operator()(const ants::Vector2i& v) const
         {

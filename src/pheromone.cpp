@@ -5,16 +5,25 @@
 #include <algorithm>
 #include "ants/pheromone.h"
 
-#define FACTOR 5.0
+#define FACTOR 1.0
 
 double ants::Pheromone::getColourValue() const {
-    // just the average but multiplied by a constant
-    double sum = 0.0;
-    double count = 0.0;
+    // average over all the colonies of whichever is higher, to food or to colony
+//    double sum = 0.0;
+//    double count = 0.0;
+//    for (const auto &item : values) {
+//        sum += std::max(item.toFood, item.toColony);
+//        count += 1.0;
+//    }
+//    return std::clamp((sum / count) * FACTOR, 0.0, 1.0);
+
+    // max over all the colonies of whichever is higher, to food or to colony
+    double bestStrength = -9999.0;
     for (const auto &item : values) {
-        sum += item.toFood + item.toColony;
-        count += 2.0;
+        double strength = std::max(item.toFood, item.toColony);
+        if (strength > bestStrength) {
+            bestStrength = strength;
+        }
     }
-    // TODO make this constant configurable somehow?
-    return std::clamp((sum / count) * FACTOR, 0.0, 1.0);
+    return bestStrength;
 }

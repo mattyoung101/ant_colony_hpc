@@ -34,13 +34,19 @@ static void writeFunc(void *context, void *data, int size) {
     imageContext->world.writeToTar(imageContext->filename, static_cast<uint8_t*>(data), size);
 }
 
-int main() {
+int main(int argc, char *argv[]) {
     log_set_level(LOG_TRACE);
     log_info("COSC3500 Ant Simulator - Matt Young, 2022");
 
     // load config file from disk
-    log_debug("Loading config file...");
-    mINI::INIFile configFile("antconfig.ini");
+    std::string configPath = "antconfig.ini";
+    if (argc == 2) {
+        configPath = std::string(argv[1]);
+    } else if (argc > 2) {
+        throw std::invalid_argument("Usage: ./ant_colony [config_path]");
+    }
+    log_debug("Loading config file from %s", configPath.c_str());
+    mINI::INIFile configFile(configPath);
     mINI::INIStructure config{};
     if (!configFile.read(config)) {
         throw std::runtime_error("Failed to load antconfig.ini, check your working dir");

@@ -27,7 +27,7 @@ namespace ants {
         ~World();
 
         /// Updates the world for one time step
-        void update() noexcept;
+        void update();
 
         /**
          * Sets up PNG TAR disk output. PNG files are written to a TAR file that can then be downloaded
@@ -58,16 +58,8 @@ namespace ants {
         /// Renders the current world to an uncompressed RGB pixel buffer.
         [[nodiscard]] std::vector<uint8_t> renderWorldUncompressed() const;
 
-        /**
-         * Finds the distance to the nearest food tile, from pos. Distance metric is Cheybshev
-         * distance.
-         * @param pos input position
-         * @return pair: distance, position of food tile
-         */
-        [[nodiscard]] std::pair<double, Vector2i> findNearestFood(const Vector2i &pos) const;
-
-        /// Returns a random vector between (-1,1)
-        Vector2i randomMovementVector();
+        /// Returns a random movement vector for the specified ant
+        Vector2i randomMovementVector(const Ant &ant);
 
         /// Decays pheromones in the grid
         void decayPheromones();
@@ -103,7 +95,7 @@ namespace ants {
         double pheromoneDecayFactor{};
         double pheromoneGainFactor{};
 
-        double antMoveRightChance{};
+        double antMoveRightChance{}, antUsePheromone{};
         int32_t antKillNotUseful{};
 
         /// PNG TAR output file

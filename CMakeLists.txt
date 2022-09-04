@@ -9,21 +9,31 @@ project(ant_colony LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_C_STANDARD 11)
 add_compile_options(-Wall -Wextra -Wno-unused-parameter -Wno-unused-variable -g3)
-# only supported under clang, but should be faster and allegedly better
-# for mold install instructions, see: https://github.com/rui314/mold
-# ---------- uncomment this if you're cool and want to compile mold, otherwise leave out ----------
-#add_link_options(-fuse-ld=mold)
+
+if (${CMAKE_VERSION} VERSION_LESS "3.16.0")
+    message(STATUS "Ancient CMake version detected, doing our best")
+    # if they forget to pass CMAKE_BUILD_TYPE=Release, compilation won't work, so remind them
+    if (NOT ${CMAKE_BUILD_TYPE} STREQUAL "Release")
+        message(FATAL_ERROR "Only CMAKE_BUILD_TYPE=Release is supported on getafix. Please see README.md.")
+    endif()
+endif()
 
 # Optimisation
 if ("${CMAKE_BUILD_TYPE}" STREQUAL "Release")
     message(STATUS "Release build, enabling performance and static linking")
-    # compile release builds in static linking mode so we can upload them to getafix
-    #
-    # getafix CPU is Intel Xeon E5-2660, which should be x86-64-v2 (it's a rather old CPU)
-    # see: https://unix.stackexchange.com/a/631226
-    # TODO get the right mtune as well
-    add_compile_options(-O3 -march=x86-64-v2 -flto)
-    add_link_options(-flto)
+    # since we're no longer doing the whole static linking thing, just do march=native and mtune=native
+    # should compile the best on both my dev machine and getafix
+    add_compile_options(-O3 -march=native -mtune=native -flto)
+
+    # extremely annoyingly the **latest** version of CMake ships is 3.9.1 which doesn't even support
+    # the add_link_options command
+    if(${CMAKE_VERSION} VERSION_LESS "3.16.0")
+        message(STATUS "Using old link options method")
+        set (CMAKE_SHARED_LINKER_FLAGS "-flto")
+    else()
+        message(STATUS "Using new link options method")
+        add_link_options(-flto)
+    endif()
 elseif("${CMAKE_BUILD_TYPE}" STREQUAL "Profile")
     message(STATUS "Profile build, enabling gprof")
     add_compile_options(-O0 -pg -flto)
@@ -35,9 +45,6 @@ else()
 endif()
 
 include_directories(include)
-
-# libraries
-# TODO must check this runs on moss!!!
 include_directories(lib)
 
 add_executable(ant_colony lib/log/log.c lib/log/log.h src/main.cpp src/world.cpp lib/stb/stb_image.c
@@ -45,5 +52,4 @@ add_executable(ant_colony lib/log/log.c lib/log/log.h src/main.cpp src/world.cpp
     src/pheromone.cpp lib/clip/clip.cpp lib/clip/clip_x11.cpp lib/clip/image.cpp)
 
 find_package(Threads REQUIRED)
-# TODO must check this runs on getafix (specifically xcb)
 target_link_libraries(ant_colony xcb Threads::Threads)
