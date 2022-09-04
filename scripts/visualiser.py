@@ -6,7 +6,7 @@ import cv2
 import numpy as np
 
 # Desired milliseconds between each frame
-FRAME_MS = 50.0
+FRAME_MS = 25.0
 # Factor to resize the images by, 1.0 = same size
 SCALE_FACTOR = 5.0
 

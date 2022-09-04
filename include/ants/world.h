@@ -98,6 +98,9 @@ namespace ants {
         double antMoveRightChance{}, antUsePheromone{};
         int32_t antKillNotUseful{};
 
+        double colonyHungerDrain{}, colonyHungerReplenish{};
+        int32_t colonyAntsPerTick{};
+
         /// PNG TAR output file
         mtar_t tarfile{};
         /// true if PNG TAR recording initialised successfully

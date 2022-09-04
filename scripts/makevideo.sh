@@ -15,7 +15,7 @@ echo "Processing"
 # - https://trac.ffmpeg.org/wiki/Encode/VP9
 # - https://stackoverflow.com/questions/24961127/how-to-create-a-video-from-images-with-ffmpeg
 # - https://ottverse.com/how-to-create-gif-from-images-using-ffmpeg/
-ffmpeg -y -framerate 20 -i "$TMPDIR/%d.png" -vf scale=800:800:flags=neighbor \
+ffmpeg -y -framerate 40 -i "$TMPDIR/%d.png" -vf scale=800:800:flags=neighbor \
   -c:v libx264 -crf 25 -b:v 0 ants.mp4
 
 echo "Cleaning up"

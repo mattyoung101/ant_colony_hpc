@@ -148,6 +148,9 @@ World::World(const std::string& filename, mINI::INIStructure config) {
     antMoveRightChance = std::stod(config["Ants"]["move_right_chance"]);
     antKillNotUseful = std::stoi(config["Ants"]["kill_not_useful"]);
     antUsePheromone = std::stod(config["Ants"]["use_pheromone"]);
+    colonyAntsPerTick = std::stoi(config["Colony"]["ants_per_tick"]);
+    colonyHungerDrain = std::stod(config["Colony"]["hunger_drain"]);
+    colonyHungerReplenish = std::stod(config["Colony"]["hunger_replenish"]);
 
     stbi_image_free(image);
 }
@@ -192,8 +195,12 @@ World::computePheromoneVector(const Colony &colony, const Ant &ant) const {
         if (x < 0 || y < 0 || x >= width || y >= height || obstacleGrid[y][x]) {
             continue;
         }
+        // check it's not a position we have already visited
+        if (ant.visitedPos.find(Vector2i(x,y)) != ant.visitedPos.end()) {
+            continue;
+        }
 
-        double strength = 0.0;
+        double strength;
         if (ant.holdingFood) {
             // ant has food, use the "to colony" strength
             strength = pheromoneGrid[y][x]->values[colony.id].toColony;
@@ -235,7 +242,10 @@ void World::update() {
     decayPheromones();
 
     // update the ants
+    // TODO divide up this function to find more hotspots
+    // TODO maybe we could fix some problems by having the ants **only** follow pheromones when going home?
     for (auto colony = colonies.begin(); colony != colonies.end() ; ) {
+        bool colonyShouldAddMoreAnts = false;
         for (auto ant = colony->ants.begin(); ant != colony->ants.end(); ) {
             // position the ant might move to
             auto newX = ant->pos.x;
@@ -243,28 +253,24 @@ void World::update() {
 
             // see what pheromones are around teh ant
             auto [phVector, phStrength] = computePheromoneVector(*colony, *ant);
-            auto movement = randomMovementVector(*ant);
+            Vector2i movement{};
+            if (phStrength >= antUsePheromone) {
+                // strong pheromone, use that
+                movement = phVector;
+            } else {
+                // pheromone not strong enough, move randomly
+                movement = randomMovementVector(*ant);
+            }
 
             // apply movement vector
             newX += movement.x;
             newY += movement.y;
 
-            // behaviour specific code
-            if (!ant->holdingFood) {
-                // ant is not holding food: we want to get to food
-                // important note: we only count "ticks since last useful" when the ant is
-                // not holding food. if the ant is holding food, even if it's taking forever to get
-                // back to base, it's still considered useful.
-                ant->ticksSinceLastUseful++;
-            } else {
-                // ant is holding food: we want to go back to the colony
-            }
-
             // only move the ant if it wouldn't intersect an obstacle, and is in bounds
             // also don't allow ants to walk on food if they are already holding food
             if (newX < 0 || newY < 0 || newX >= width || newY >= height || obstacleGrid[newY][newX]
                 || (ant->holdingFood && foodGrid[newY][newX])) {
-                // reached an obstacle, let's try a new random movement direction
+                // reached an obstacle, flip our direction ("bounce off" the obstacle)
                 ant->preferredDir.x *= -1;
                 ant->preferredDir.y *= -1;
                 // don't update ant position
@@ -272,6 +278,7 @@ void World::update() {
                 // checks passed, so update the ant data
                 ant->pos.x = newX;
                 ant->pos.y = newY;
+                ant->visitedPos.insert(Vector2i(newX, newY));
             }
 
             // update world
@@ -296,14 +303,28 @@ void World::update() {
                 // since the ant has reached food, invert its direction for heading back
                 ant->preferredDir.x *= -1;
                 ant->preferredDir.y *= -1;
+
+                ant->visitedPos.clear();
             } else if (ant->holdingFood && ant->pos.x == colony->pos.x && ant->pos.y == colony->pos.y) {
                 // got our food and returned home (on top of the colony tile)
                 log_debug("Ant in colony %d just returned home with food", colony->id);
                 ant->holdingFood = false;
                 ant->ticksSinceLastUseful = 0;
-                // TODO update colony stats (hunger, have it make more ants, etc)
+                ant->visitedPos.clear();
+
+                // boost the colony
+                colony->hunger += colonyHungerReplenish;
+                // due to the fact that C++ is **by far** the worst programming language known to man,
+                // we cannot (yes, physically CANNOT) insert into a vector while iterating over it,
+                // no matter what iterator paradigm is used. so, this hack is required.
+                // (see below for the rest of it)
+                colonyShouldAddMoreAnts = true;
             }
 
+            // update ticks since last useful
+            if (!ant->holdingFood) {
+                ant->ticksSinceLastUseful++;
+            }
             // possibly kill this ant if its time has expired (+ some noise)
             if (ant->ticksSinceLastUseful > antKillNotUseful + antKillNoise(rng)) {
                 log_debug("Ant in colony id %d has died", colony->id);
@@ -313,8 +334,28 @@ void World::update() {
             }
         }
 
+        // continuing on above from the terrible hack required due to C++
+        // while I'm at it, it's like, we should note that most languages don't allow modification
+        // while iterating, which is fair enough. but at least languages like Java have a
+        // CopyOnWriteArrayList, or libgdx's SnapshotArray, or even just .removeAll() - none of which
+        // are remotely provided in C++. in fact, the whole iterator system in C++, I would say, is
+        // poorly designed trash that should be yeeted at the next ISO standard meeting, along with
+        // the rest of this atrocious, awful, miserable, bloated language
+        if (colonyShouldAddMoreAnts) {
+            log_debug("Adding more ants to colony id %d", colony->id);
+            for (int i = 0; i < colonyAntsPerTick; i++) {
+                Ant newAnt{};
+                newAnt.holdingFood = false;
+                // newAnt starts at the centre of colony
+                newAnt.pos = colony->pos;
+                // preferred movement direction for when moving randomly
+                newAnt.preferredDir = directions[indexDist(rng)];
+                colony->ants.emplace_back(newAnt);
+            }
+        }
+
         // update colony hunger
-        // TODO
+        colony->hunger -= colonyHungerDrain;
 
         // kill the colony if the hunger meter has expired, or all its ants have died
         if (colony->hunger <= 0 || colony->ants.empty()) {
