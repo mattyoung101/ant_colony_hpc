@@ -59,6 +59,13 @@ namespace ants {
         bool operator>=(const RGBColour &rhs) const {
             return !(*this < rhs);
         }
+
+        RGBColour operator*(double x) const {
+            auto newR = static_cast<uint8_t>(std::round(static_cast<double>(r) * x));
+            auto newG = static_cast<uint8_t>(std::round(static_cast<double>(g) * x));
+            auto newB = static_cast<uint8_t>(std::round(static_cast<double>(b) * x));
+            return {newR, newG, newB};
+        }
     };
 
     /// 2D vector (integer)
@@ -121,44 +128,6 @@ namespace ants {
                 return {x2, y2};
             }
             return {0, 0}; // hack, stupid, should fix
-        }
-    };
-
-    /// 2D vector (float)
-    struct Vector2f {
-        float x{}, y{};
-
-        Vector2f() = default;
-
-        Vector2f(float x, float y) : x(x), y(y) {}
-
-        bool operator==(const Vector2f &rhs) const {
-            return x == rhs.x &&
-                   y == rhs.y;
-        }
-
-        bool operator!=(const Vector2f &rhs) const {
-            return !(rhs == *this);
-        }
-
-        bool operator<(const Vector2f &rhs) const {
-            if (x < rhs.x)
-                return true;
-            if (rhs.x < x)
-                return false;
-            return y < rhs.y;
-        }
-
-        bool operator>(const Vector2f &rhs) const {
-            return rhs < *this;
-        }
-
-        bool operator<=(const Vector2f &rhs) const {
-            return !(rhs < *this);
-        }
-
-        bool operator>=(const Vector2f &rhs) const {
-            return !(*this < rhs);
         }
     };
 

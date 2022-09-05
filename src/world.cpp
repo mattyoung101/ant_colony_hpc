@@ -225,7 +225,7 @@ void World::decayPheromones() {
                 value.toColony -= pheromoneDecayFactor;
                 value.toFood -= pheromoneDecayFactor;
 
-                // clamp so it doesn't go below zero
+                // clamp so it doesn't go below zero or above 1.0
                 value.toColony = std::clamp(value.toColony, 0.0, 1.0);
                 value.toFood = std::clamp(value.toFood, 0.0, 1.0);
             }
@@ -314,7 +314,7 @@ void World::update() {
 
                 // boost the colony
                 colony->hunger += colonyHungerReplenish;
-                // due to the fact that C++ is **by far** the worst programming language known to man,
+                // due to the fact that C++ is by far the worst programming language known to man,
                 // we cannot (yes, physically CANNOT) insert into a vector while iterating over it,
                 // no matter what iterator paradigm is used. so, this hack is required.
                 // (see below for the rest of it)
@@ -335,12 +335,10 @@ void World::update() {
         }
 
         // continuing on above from the terrible hack required due to C++
-        // while I'm at it, it's like, we should note that most languages don't allow modification
-        // while iterating, which is fair enough. but at least languages like Java have a
-        // CopyOnWriteArrayList, or libgdx's SnapshotArray, or even just .removeAll() - none of which
-        // are remotely provided in C++. in fact, the whole iterator system in C++, I would say, is
-        // poorly designed trash that should be yeeted at the next ISO standard meeting, along with
-        // the rest of this atrocious, awful, miserable, bloated language
+        // worth nothing that yes, while most languages don't allow modification while iterating,
+        // which is fair enough,  at least languages like Java have a CopyOnWriteArrayList, or even
+        // just .removeAll() which is nowhere to be seen in C++. seriously, look up how to get the
+        // equivalent of removeAll on a vector in this awful language, it's terrible.
         if (colonyShouldAddMoreAnts) {
             log_debug("Adding more ants to colony id %d", colony->id);
             for (int i = 0; i < colonyAntsPerTick; i++) {
@@ -464,17 +462,33 @@ std::vector<uint8_t> World::renderWorldUncompressed() const {
         }
     }
 
-    // render ants on top of world
+    int channels = 3;
+
+    // render ants and colony on top of world
     for (const auto &colony : colonies) {
         for (const auto &ant : colony.ants) {
             // ants are the same colour as their colony
-            int channels = 3;
             int y = ant.pos.y;
             int x = ant.pos.x;
             uint8_t *p = out.data() + (channels * (y * width + x));
             p[0] = colony.colour.r;
             p[1] = colony.colour.g;
             p[2] = colony.colour.b;
+        }
+
+        // draw colony as a square with colour based on hunger
+        int h = 2;
+        auto colonyColour = colony.colour * colony.hunger;
+        for (int y = colony.pos.y - h; y < colony.pos.y + h; y++) {
+            for (int x = colony.pos.x - h; x < colony.pos.x + h; x++) {
+                if (x < 0 || y < 0 || x >= width || y >= height) {
+                    continue;
+                }
+                uint8_t *p = out.data() + (channels * (y * width + x));
+                p[0] = colonyColour.r;
+                p[1] = colonyColour.g;
+                p[2] = colonyColour.b;
+            }
         }
     }
 
