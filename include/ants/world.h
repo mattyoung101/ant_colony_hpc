@@ -99,7 +99,7 @@ namespace ants {
         int32_t antKillNotUseful{};
 
         double colonyHungerDrain{}, colonyHungerReplenish{};
-        int32_t colonyAntsPerTick{};
+        int32_t colonyAntsPerTick{}, colonyReturnDist{};
 
         /// PNG TAR output file
         mtar_t tarfile{};

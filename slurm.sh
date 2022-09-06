@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH -n 1
-# TODO the rest of it (see #cosc3500)
+# TODO the rest of it
 
 # Slurm submission script UNTESTED
 

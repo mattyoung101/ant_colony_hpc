@@ -60,6 +60,12 @@ namespace ants {
             return !(*this < rhs);
         }
 
+        friend std::ostream &operator<<(std::ostream &os, const RGBColour &colour) {
+            os << "(" << std::to_string(colour.r) << ", " << std::to_string(colour.g)
+                << ", " << std::to_string(colour.b) << ")";
+            return os;
+        }
+
         RGBColour operator*(double x) const {
             auto newR = static_cast<uint8_t>(std::round(static_cast<double>(r) * x));
             auto newG = static_cast<uint8_t>(std::round(static_cast<double>(g) * x));
@@ -69,7 +75,6 @@ namespace ants {
     };
 
     /// 2D vector (integer)
-    // FIXME make this a template?
     struct Vector2i {
         int32_t x{}, y{};
 

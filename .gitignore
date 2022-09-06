@@ -187,3 +187,4 @@ _deps
 *.tar
 *.mp4
 *.webm
+!gmon.out

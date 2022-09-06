@@ -36,6 +36,7 @@ static const Vector2i directions[] = {Vector2i(-1, -1), Vector2i(-1, 0), Vector2
                                       Vector2i(0, -1), Vector2i(0, 1),
                                       Vector2i(1, -1), Vector2i(1, 0), Vector2i(1, 1)};
 static std::uniform_int_distribution<int> indexDist(0, 7);
+static size_t maxAnts = 0;
 
 World::World(const std::string& filename, mINI::INIStructure config) {
     log_info("Creating world from PNG %s", filename.c_str());
@@ -132,8 +133,8 @@ World::World(const std::string& filename, mINI::INIStructure config) {
         colonies.emplace_back(colony);
     }
 
-    // fix up pheromone grid using knowledge from above: each pheromone needs to have a reference to
-    // each colony we have
+    // fix up pheromone grid using knowledge from above: each pheromone tile needs to have an entry
+    // for all of the above colonies
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
             for (size_t colony = 0; colony < uniqueColours.size(); colony++) {
@@ -151,6 +152,7 @@ World::World(const std::string& filename, mINI::INIStructure config) {
     colonyAntsPerTick = std::stoi(config["Colony"]["ants_per_tick"]);
     colonyHungerDrain = std::stod(config["Colony"]["hunger_drain"]);
     colonyHungerReplenish = std::stod(config["Colony"]["hunger_replenish"]);
+    colonyReturnDist = std::stoi(config["Colony"]["return_distance"]);
 
     stbi_image_free(image);
 }
@@ -195,7 +197,7 @@ World::computePheromoneVector(const Colony &colony, const Ant &ant) const {
         if (x < 0 || y < 0 || x >= width || y >= height || obstacleGrid[y][x]) {
             continue;
         }
-        // check it's not a position we have already visited
+        // check it's not a position we have already visited this run
         if (ant.visitedPos.find(Vector2i(x,y)) != ant.visitedPos.end()) {
             continue;
         }
@@ -234,6 +236,7 @@ void World::decayPheromones() {
 }
 
 void World::update() {
+    size_t antsAlive = 0;
     // so that we don't kill all the ants at once (which looks weird), add some extra noise to the
     // time we might kill them
     std::uniform_int_distribution<int> antKillNoise(0, 75);
@@ -242,7 +245,6 @@ void World::update() {
     decayPheromones();
 
     // update the ants
-    // TODO divide up this function to find more hotspots
     // TODO maybe we could fix some problems by having the ants **only** follow pheromones when going home?
     for (auto colony = colonies.begin(); colony != colonies.end() ; ) {
         bool colonyShouldAddMoreAnts = false;
@@ -251,9 +253,12 @@ void World::update() {
             auto newX = ant->pos.x;
             auto newY = ant->pos.y;
 
-            // see what pheromones are around teh ant
+            // see what pheromones are around the ant
             auto [phVector, phStrength] = computePheromoneVector(*colony, *ant);
             Vector2i movement{};
+            // FIXME I think this method of choosing whether or not to follow pheromones is bad
+            //  instead, maybe it should follow randomly until it reaches food, then follow pheromones
+            //  also maybe have only first generation ants do random stuff, others should follow pheromones
             if (phStrength >= antUsePheromone) {
                 // strong pheromone, use that
                 movement = phVector;
@@ -261,7 +266,6 @@ void World::update() {
                 // pheromone not strong enough, move randomly
                 movement = randomMovementVector(*ant);
             }
-
             // apply movement vector
             newX += movement.x;
             newY += movement.y;
@@ -297,16 +301,16 @@ void World::update() {
                 log_debug("Ant in colony %d just found food at %d,%d", colony->id, ant->pos.x, ant->pos.y);
                 ant->holdingFood = true;
                 ant->ticksSinceLastUseful = 0;
-
-                foodGrid[ant->pos.y][ant->pos.x] = false;
-
                 // since the ant has reached food, invert its direction for heading back
                 ant->preferredDir.x *= -1;
                 ant->preferredDir.y *= -1;
-
+                // reset the positions the ant has visited for going home
                 ant->visitedPos.clear();
-            } else if (ant->holdingFood && ant->pos.x == colony->pos.x && ant->pos.y == colony->pos.y) {
-                // got our food and returned home (on top of the colony tile)
+
+                // remove food from the world
+                foodGrid[ant->pos.y][ant->pos.x] = false;
+            } else if (ant->holdingFood && ant->pos.distance(colony->pos) <= colonyReturnDist) {
+                // got our food and returned home (near enough to the colony)
                 log_debug("Ant in colony %d just returned home with food", colony->id);
                 ant->holdingFood = false;
                 ant->ticksSinceLastUseful = 0;
@@ -315,9 +319,8 @@ void World::update() {
                 // boost the colony
                 colony->hunger += colonyHungerReplenish;
                 // due to the fact that C++ is by far the worst programming language known to man,
-                // we cannot (yes, physically CANNOT) insert into a vector while iterating over it,
-                // no matter what iterator paradigm is used. so, this hack is required.
-                // (see below for the rest of it)
+                // we cannot insert into a vector while iterating over it, no matter what iterator
+                // paradigm is used. so, this hack is required (see below for the rest of it)
                 colonyShouldAddMoreAnts = true;
             }
 
@@ -327,7 +330,7 @@ void World::update() {
             }
             // possibly kill this ant if its time has expired (+ some noise)
             if (ant->ticksSinceLastUseful > antKillNotUseful + antKillNoise(rng)) {
-                log_debug("Ant in colony id %d has died", colony->id);
+                log_debug("Ant in colony id %d has died at %d,%d", colony->id, ant->pos.x, ant->pos.y);
                 ant = colony->ants.erase(ant);
             } else {
                 ant++;
@@ -335,10 +338,6 @@ void World::update() {
         }
 
         // continuing on above from the terrible hack required due to C++
-        // worth nothing that yes, while most languages don't allow modification while iterating,
-        // which is fair enough,  at least languages like Java have a CopyOnWriteArrayList, or even
-        // just .removeAll() which is nowhere to be seen in C++. seriously, look up how to get the
-        // equivalent of removeAll on a vector in this awful language, it's terrible.
         if (colonyShouldAddMoreAnts) {
             log_debug("Adding more ants to colony id %d", colony->id);
             for (int i = 0; i < colonyAntsPerTick; i++) {
@@ -354,6 +353,8 @@ void World::update() {
 
         // update colony hunger
         colony->hunger -= colonyHungerDrain;
+        // FIXME consider if we want to get rid of this (only put in colour code) and allow ants to "stockpile"
+        colony->hunger = std::clamp(colony->hunger, 0.0, 1.0);
 
         // kill the colony if the hunger meter has expired, or all its ants have died
         if (colony->hunger <= 0 || colony->ants.empty()) {
@@ -361,7 +362,12 @@ void World::update() {
                       colony->ants.size());
             colony = colonies.erase(colony);
         } else {
+            antsAlive += colony->ants.size();
             colony++;
+        }
+
+        if (antsAlive > maxAnts) {
+            maxAnts = antsAlive;
         }
     }
 }
@@ -428,6 +434,8 @@ void World::finaliseRecording() {
     } else {
         log_info("PNG TAR recording not initialised, so not being finalised");
     }
+    log_info("Surviving colonies: %zu", colonies.size());
+    log_info("Max ants alive: %zu", maxAnts);
 }
 
 std::vector<uint8_t> World::renderWorldUncompressed() const {
@@ -463,7 +471,6 @@ std::vector<uint8_t> World::renderWorldUncompressed() const {
     }
 
     int channels = 3;
-
     // render ants and colony on top of world
     for (const auto &colony : colonies) {
         for (const auto &ant : colony.ants) {
@@ -478,16 +485,18 @@ std::vector<uint8_t> World::renderWorldUncompressed() const {
 
         // draw colony as a square with colour based on hunger
         int h = 2;
-        auto colonyColour = colony.colour * colony.hunger;
+        auto colour = colony.colour * colony.hunger;
+//        std::cout << "Colony id " << colony.id << " base colour " << colony.colour << " new colour "
+//            << colour << " hunger " << colony.hunger << std::endl;
         for (int y = colony.pos.y - h; y < colony.pos.y + h; y++) {
             for (int x = colony.pos.x - h; x < colony.pos.x + h; x++) {
                 if (x < 0 || y < 0 || x >= width || y >= height) {
                     continue;
                 }
                 uint8_t *p = out.data() + (channels * (y * width + x));
-                p[0] = colonyColour.r;
-                p[1] = colonyColour.g;
-                p[2] = colonyColour.b;
+                p[0] = colour.r;
+                p[1] = colour.g;
+                p[2] = colour.b;
             }
         }
     }

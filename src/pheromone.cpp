@@ -5,7 +5,7 @@
 #include <algorithm>
 #include "ants/pheromone.h"
 
-#define FACTOR 1.0
+#define FACTOR 3.0
 
 double ants::Pheromone::getColourValue() const {
     // average over all the colonies of whichever is higher, to food or to colony
