@@ -4,8 +4,6 @@ cmake_minimum_required(VERSION 3.9.1)
 project(ant_colony LANGUAGES C CXX)
 
 ## Compile as C++17
-# getafix ships an absolutely pre-historic version of gcc that only compiles up to C++11, but my
-# plan is to ship release builds as static binaries s othey can just be uploaded
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_C_STANDARD 11)
 add_compile_options(-Wall -Wextra -Wno-unused-parameter -Wno-unused-variable -g3)
@@ -25,7 +23,7 @@ if ("${CMAKE_BUILD_TYPE}" STREQUAL "Release")
     # should compile the best on both my dev machine and getafix
     add_compile_options(-O3 -march=native -mtune=native -flto)
 
-    # extremely annoyingly the **latest** version of CMake ships is 3.9.1 which doesn't even support
+    # extremely annoyingly the **latest** version of CMake getafix ships is 3.9.1 which doesn't even support
     # the add_link_options command
     if(${CMAKE_VERSION} VERSION_LESS "3.16.0")
         message(STATUS "Using old link options method")
