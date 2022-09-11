@@ -146,6 +146,7 @@ World::World(const std::string& filename, mINI::INIStructure config) {
     // load INI values
     pheromoneDecayFactor = std::stod(config["Pheromones"]["decay_factor"]);
     pheromoneGainFactor = std::stod(config["Pheromones"]["gain_factor"]);
+    pheromoneFuzzFactor = std::stod(config["Pheromones"]["fuzz_factor"]);
     antMoveRightChance = std::stod(config["Ants"]["move_right_chance"]);
     antKillNotUseful = std::stoi(config["Ants"]["kill_not_useful"]);
     antUsePheromone = std::stod(config["Ants"]["use_pheromone"]);
@@ -221,11 +222,29 @@ World::computePheromoneVector(const Colony &colony, const Ant &ant) const {
 }
 
 void World::decayPheromones() {
+    // decay pheromones at a slightly different rate
+    // FIXME NOTE TODO
+    // - this massively slows down the sim (by at least 6x in release build)
+    // - improves behaviour significantly
+    // - should we keep it? changes results of the sim, but is a lot better... what to do
+    double fuzz = pheromoneFuzzFactor * pheromoneDecayFactor;
+    std::uniform_real_distribution<double> fuzzDist(-fuzz, fuzz);
+
+    // to speed up random number generation, we could have a thread that all it does is continuously generate
+    // random numbers and put them in a queue. other threads can pull from that when they want numbers.
+
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
             for (auto &value : pheromoneGrid[y][x]->values) {
-                value.toColony -= pheromoneDecayFactor;
-                value.toFood -= pheromoneDecayFactor;
+                if (fabs(fuzz) >= 0.0001) {
+                    // fuzz factor is not 0, use RNG
+                    value.toColony -= pheromoneDecayFactor + fuzzDist(rng);
+                    value.toFood -= pheromoneDecayFactor + fuzzDist(rng);
+                } else {
+                    // fuzz factor is 0, don't use RNG
+                    value.toColony -= pheromoneDecayFactor;
+                    value.toFood -= pheromoneDecayFactor;
+                }
 
                 // clamp so it doesn't go below zero or above 1.0
                 value.toColony = std::clamp(value.toColony, 0.0, 1.0);

@@ -94,6 +94,7 @@ namespace ants {
         /// INI values
         double pheromoneDecayFactor{};
         double pheromoneGainFactor{};
+        double pheromoneFuzzFactor{};
 
         double antMoveRightChance{}, antUsePheromone{};
         int32_t antKillNotUseful{};
