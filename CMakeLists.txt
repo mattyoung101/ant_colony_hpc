@@ -21,16 +21,16 @@ if ("${CMAKE_BUILD_TYPE}" STREQUAL "Release")
     message(STATUS "Release build, enabling performance and static linking")
     # since we're no longer doing the whole static linking thing, just do march=native and mtune=native
     # should compile the best on both my dev machine and getafix
-    add_compile_options(-O3 -march=native -mtune=native -flto)
+    add_compile_options(-O3 -march=native -mtune=native -flto -fno-math-errno -freciprocal-math)
 
     # extremely annoyingly the **latest** version of CMake getafix ships is 3.9.1 which doesn't even support
     # the add_link_options command
     if(${CMAKE_VERSION} VERSION_LESS "3.16.0")
         message(STATUS "Using old link options method")
-        set (CMAKE_SHARED_LINKER_FLAGS "-flto")
+        set (CMAKE_SHARED_LINKER_FLAGS "-flto -fno-math-errno")
     else()
         message(STATUS "Using new link options method")
-        add_link_options(-flto)
+        add_link_options(-flto -fno-math-errno)
     endif()
 elseif("${CMAKE_BUILD_TYPE}" STREQUAL "Profile")
     message(STATUS "Profile build, enabling gprof")
@@ -51,4 +51,5 @@ add_executable(ant_colony lib/log/log.c lib/log/log.h src/main.cpp src/world.cpp
     src/pheromone.cpp lib/clip/clip.cpp lib/clip/clip_x11.cpp lib/clip/image.cpp)
 
 find_package(Threads REQUIRED)
-target_link_libraries(ant_colony xcb Threads::Threads)
+find_package(OpenMP REQUIRED)
+target_link_libraries(ant_colony xcb Threads::Threads OpenMP::OpenMP_CXX)

@@ -18,6 +18,7 @@
 #include "log/log.h"
 #include "tinycolor/tinycolormap.hpp"
 #include "clip/clip.h"
+#include "concqueue/concurrentqueue.h"
 
 /// Macro to assist in freeing grids
 #define DELETE_GRID(grid) do { \
@@ -227,19 +228,31 @@ void World::decayPheromones() {
     // - this massively slows down the sim (by at least 6x in release build)
     // - improves behaviour significantly
     // - should we keep it? changes results of the sim, but is a lot better... what to do
+    // FIXME NOTE TODO
+
     double fuzz = pheromoneFuzzFactor * pheromoneDecayFactor;
     std::uniform_real_distribution<double> fuzzDist(-fuzz, fuzz);
 
-    // to speed up random number generation, we could have a thread that all it does is continuously generate
-    // random numbers and put them in a queue. other threads can pull from that when they want numbers.
+    // when we thread this, we want each thread to have its own RNG. if we didn't do this, then the
+    // way the threads access the RNG (which is non-deterministic) would in turn cause the sim
+    // results to be non-deterministic. so, what we do is select a unique seed per function call
+    // that each "thread local RNG" will be seeded with
+    uint64_t seed = rng();
+
+    // TODO if/when we do OpenMP, this should be in the parallel region
+    pcg32_fast localRng{};
+    localRng.seed(seed);
 
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
             for (auto &value : pheromoneGrid[y][x]->values) {
                 if (fabs(fuzz) >= 0.0001) {
                     // fuzz factor is not 0, use RNG
-                    value.toColony -= pheromoneDecayFactor + fuzzDist(rng);
-                    value.toFood -= pheromoneDecayFactor + fuzzDist(rng);
+                    // micro-optimisation: compute random value and share it across toColony and
+                    // toFood, instead of computing it twice
+                    auto randomness = fuzzDist(localRng);
+                    value.toColony -= pheromoneDecayFactor + randomness;
+                    value.toFood -= pheromoneDecayFactor + randomness;
                 } else {
                     // fuzz factor is 0, don't use RNG
                     value.toColony -= pheromoneDecayFactor;
@@ -463,6 +476,7 @@ std::vector<uint8_t> World::renderWorldUncompressed() const {
     out.reserve(width * height * 3);
 
     // render world
+    // TODO OpenMP this (may not be easy, we can't use push_back)
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
             if (foodGrid[y][x]) {
@@ -505,8 +519,6 @@ std::vector<uint8_t> World::renderWorldUncompressed() const {
         // draw colony as a square with colour based on hunger
         int h = 2;
         auto colour = colony.colour * colony.hunger;
-//        std::cout << "Colony id " << colony.id << " base colour " << colony.colour << " new colour "
-//            << colour << " hunger " << colony.hunger << std::endl;
         for (int y = colony.pos.y - h; y < colony.pos.y + h; y++) {
             for (int x = colony.pos.x - h; x < colony.pos.x + h; x++) {
                 if (x < 0 || y < 0 || x >= width || y >= height) {

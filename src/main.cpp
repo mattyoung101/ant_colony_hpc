@@ -6,6 +6,7 @@
 #include <chrono>
 #include <thread>
 #include <utility>
+#include <omp.h>
 #include "ants/world.h"
 #include "mini/ini.h"
 #include "log/log.h"
@@ -29,14 +30,34 @@ struct ImageContext {
 // for stbi_write
 // the context pointer is the world instance
 static void writeFunc(void *context, void *data, int size) {
-    auto imageContext = static_cast<ImageContext*>(context);
-    //log_trace("Writing %d bytes to file in TAR %s", size, imageContext->filename.c_str());
-    imageContext->world.writeToTar(imageContext->filename, static_cast<uint8_t*>(data), size);
+#pragma omp critical
+    {
+        auto imageContext = static_cast<ImageContext *>(context);
+        //log_trace("Writing %d bytes to file in TAR %s", size, imageContext->filename.c_str());
+        imageContext->world.writeToTar(imageContext->filename, static_cast<uint8_t *>(data), size);
+    }
 }
 
 int main(int argc, char *argv[]) {
     log_set_level(LOG_TRACE);
     log_info("COSC3500 Ant Simulator - Matt Young, 2022");
+
+    // initialise OpenMP
+    // for some absolutely, literally completely insane reason that is totally beyond me...
+    // OpenMP uses ONE THREAD by default???
+    // so here we tell it to use as many threads as there are CPUs
+    // requires C++11 (source: https://stackoverflow.com/a/150971/5007892)
+    uint32_t ncpus = std::thread::hardware_concurrency();
+    log_info("Machine reports %u CPU(s)", ncpus);
+    if (ncpus == 0) {
+        log_warn("Unable to detect number of CPUs, using 1 by default");
+        ncpus = 1;
+    }
+    omp_set_num_threads(static_cast<int>(ncpus));
+#pragma omp parallel default(none)
+    {
+        log_info("OpenMP will use %d thread(s)", omp_get_num_threads());
+    }
 
     // load config file from disk
     std::string configPath = "antconfig.ini";
@@ -91,6 +112,7 @@ int main(int argc, char *argv[]) {
     if (recordingEnabled) {
         size_t totalBytes = 0;
         log_info("Finalising PNG output (%zu images)", images.size());
+        // TODO OpenMP this
         for (size_t i = 0; i < images.size(); i++) {
             auto image = images[i];
             totalBytes += image.size();
