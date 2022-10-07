@@ -90,6 +90,8 @@ namespace ants {
         /// PRNG: we use PCG, and pcg64_fast, which doesn't say it has any worse statistical quality
         /// than pcg64, and has plenty large state for our use case
         pcg64_fast rng{};
+        /// Buffer of random values used in World::decayPheromones
+        std::vector<double> randomBuffer{};
 
         /// INI values
         double pheromoneDecayFactor{};

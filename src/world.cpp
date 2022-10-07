@@ -70,6 +70,20 @@ World::World(const std::string& filename, mINI::INIStructure config) {
     log_debug("RNG seed is: %ld", rngSeed);
     rng.seed(rngSeed);
 
+    // acquire random buffer generated with dump_random.cpp, from random.bin file
+    log_debug("Attempting to acquire %d doubles from random.bin", width * height);
+    FILE *randomBin = fopen("random.bin", "rb");
+    for (int i = 0; i < width * height; i++) {
+        double n = 0.0;
+        if (fread(&n, 1, sizeof(n), randomBin) <= 1) {
+            std::ostringstream ostream;
+            ostream << "Failed to load double at idx " << i << " from random.bin, file too small?";
+            throw std::runtime_error(ostream.str());
+        }
+        randomBuffer.emplace_back(n);
+    }
+    fclose(randomBin);
+
     for (int32_t y = 0; y < imgHeight; y++) {
         auto *foodRow = new bool[width]{};
         auto **pheromoneRow = new Pheromone*[width]{};
@@ -224,11 +238,11 @@ World::computePheromoneVector(const Colony &colony, const Ant &ant) const {
 
 void World::decayPheromones() {
     // decay pheromones at a slightly different rate
-    // FIXME NOTE TODO
     // - this massively slows down the sim (by at least 6x in release build)
     // - improves behaviour significantly
-    // - should we keep it? changes results of the sim, but is a lot better... what to do
-    // FIXME NOTE TODO
+
+    // TODO compute these random numbers offline, compress (maybe), and reload them
+    //  then AVX it
 
     double fuzz = pheromoneFuzzFactor * pheromoneDecayFactor;
     std::uniform_real_distribution<double> fuzzDist(-fuzz, fuzz);
@@ -239,29 +253,32 @@ void World::decayPheromones() {
     // that each "thread local RNG" will be seeded with
     uint64_t seed = rng();
 
-    // TODO if/when we do OpenMP, this should be in the parallel region
-    pcg32_fast localRng{};
-    localRng.seed(seed);
+//#pragma omp parallel default(none) firstprivate(seed, fuzz, fuzzDist)
+    {
+        pcg32_fast localRng{};
+        localRng.seed(seed);
 
-    for (int y = 0; y < height; y++) {
-        for (int x = 0; x < width; x++) {
-            for (auto &value : pheromoneGrid[y][x]->values) {
-                if (fabs(fuzz) >= 0.0001) {
-                    // fuzz factor is not 0, use RNG
-                    // micro-optimisation: compute random value and share it across toColony and
-                    // toFood, instead of computing it twice
-                    auto randomness = fuzzDist(localRng);
-                    value.toColony -= pheromoneDecayFactor + randomness;
-                    value.toFood -= pheromoneDecayFactor + randomness;
-                } else {
-                    // fuzz factor is 0, don't use RNG
-                    value.toColony -= pheromoneDecayFactor;
-                    value.toFood -= pheromoneDecayFactor;
+//#pragma omp for
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                for (auto &value: pheromoneGrid[y][x]->values) {
+                    if (fabs(fuzz) >= 0.0001) {
+                        // fuzz factor is not 0, use RNG
+                        // micro-optimisation: compute random value and share it across toColony and
+                        // toFood, instead of computing it twice
+                        auto randomness = fuzzDist(localRng);
+                        value.toColony -= pheromoneDecayFactor + randomness;
+                        value.toFood -= pheromoneDecayFactor + randomness;
+                    } else {
+                        // fuzz factor is 0, don't use RNG
+                        value.toColony -= pheromoneDecayFactor;
+                        value.toFood -= pheromoneDecayFactor;
+                    }
+
+                    // clamp so it doesn't go below zero or above 1.0
+                    value.toColony = std::clamp(value.toColony, 0.0, 1.0);
+                    value.toFood = std::clamp(value.toFood, 0.0, 1.0);
                 }
-
-                // clamp so it doesn't go below zero or above 1.0
-                value.toColony = std::clamp(value.toColony, 0.0, 1.0);
-                value.toFood = std::clamp(value.toFood, 0.0, 1.0);
             }
         }
     }
