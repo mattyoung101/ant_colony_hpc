@@ -7,6 +7,9 @@ instructions below.**
 
 Author: Matt Young (m.young2@uqconnect.edu.au)
 
+## Features
+TODO
+
 ## Building and running
 ### Compiling on getafix
 Run `./build_getafix.sh` in the root directory of the project. It should do everything automatically,
@@ -35,6 +38,15 @@ Highly recommended to run the project in CLion, as that's what I used to develop
 ## Implementation details
 See the report for most of this. In future, I'll document it more here.
 
+### Improvements done since serial draft
+- Introduced random fuzzing to the pheromone decay rate, which improves results quite a lot
+  - Random numbers are loaded from a file using `dump_random.cpp`, which is in turned still backed by PCG
+  - This is done because profiling showed generating random numbers was one of the slowest parts of the program
+- (TODO planned) Used AVX intrinsics for subtraction in `World::decayPheromones`
+- (TODO planned) Used locked grid structure during updates based on `CowGrid`
+- (TODO planned) Parallelised individual ant updates using (either OpenMP or MPI - very unlikely but possibly CUDA)
+- (TODO planned) Parallelised the loop in `World::decayPheromones`
+
 ## Attribution
 The following open source libraries are used:
 
@@ -47,4 +59,4 @@ The following open source libraries are used:
 - [clip](https://github.com/dacap/clip): Clipboard library, used for development purposes only: MIT licence
 
 ## Licence
-Hopefully eventually MPL 2.0 once the course is done. For now, academic use only.
+Hopefully eventually MPL 2.0 once the course is done. For now, academic use at UQ only.

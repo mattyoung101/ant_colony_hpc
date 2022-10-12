@@ -18,7 +18,7 @@ endif()
 
 # Optimisation
 if ("${CMAKE_BUILD_TYPE}" STREQUAL "Release")
-    message(STATUS "Release build, enabling performance and static linking")
+    message(STATUS "Release build, enabling performance")
     # since we're no longer doing the whole static linking thing, just do march=native and mtune=native
     # should compile the best on both my dev machine and getafix
     add_compile_options(-O3 -march=native -mtune=native -flto -fno-math-errno -freciprocal-math)
