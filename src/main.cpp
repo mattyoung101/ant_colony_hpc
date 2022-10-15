@@ -43,19 +43,9 @@ int main(int argc, char *argv[]) {
     log_info("COSC3500 Ant Simulator - Matt Young, 2022");
 
     // initialise OpenMP
-    // for some absolutely, literally completely insane reason that is totally beyond me...
-    // OpenMP uses ONE THREAD by default???
-    // so here we tell it to use as many threads as there are CPUs
-    // requires C++11 (source: https://stackoverflow.com/a/150971/5007892)
-    uint32_t ncpus = std::thread::hardware_concurrency();
-    log_info("Machine reports %u CPU(s)", ncpus);
-    if (ncpus == 0) {
-        log_warn("Unable to detect number of CPUs, using 1 by default");
-        ncpus = 1;
-    }
-    omp_set_num_threads(static_cast<int>(ncpus));
 #pragma omp parallel default(none)
     {
+#pragma omp master
         log_info("OpenMP will use %d thread(s)", omp_get_num_threads());
     }
 
