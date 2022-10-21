@@ -1,38 +1,60 @@
 // Snapshot grid (SnapGrid) as documented in docs/parallel.md
 // Matt Young, 2022
+#pragma once
 #include <cstdint>
 #include <cstring>
 
 namespace ants {
-    template<typename T>
     /// Snapshot grid, as documented in docs/parallel.md
+    template<typename T>
     struct SnapGrid {
-        explicit SnapGrid(int32_t size) {
+        /// Constructs a new empty SnapGrid
+        explicit SnapGrid(int32_t size)  {
             this->size = size;
-            clean = new T[size];
-            dirty = new T[size];
+            clean = new T*[size];
+            dirty = new T*[size];
         }
 
-        SnapGrid(T *data, int32_t size) {
-            clean = new T[size];
-            dirty = new T[size];
-            memcpy(clean, data, size * sizeof(T));
-            memcpy(dirty, data, size * sizeof(T));
+        SnapGrid() = default;
+
+        /// Constructs a new SnapGrid from existing data
+        SnapGrid(T **data, int32_t size) {
             this->size = size;
+            clean = new T*[size];
+            dirty = new T*[size];
+            for (int i = 0; i < size; i++) {
+                memcpy(clean[i], data[i], size * sizeof(T));
+                memcpy(dirty[i], data[i], size * sizeof(T));
+            }
         }
 
-        ~SnapGrid() {
+        /*~SnapGrid() {
             delete clean;
             delete dirty;
+        }*/
+
+        /**
+         * Inserts a row into BOTH the dirty and clean grid. This should be used only for
+         * initialisation.
+         * @param y y index to insert the row at
+         * @param row row data. Must be of length this->size
+         */
+        void insertRow(int32_t y, T *row) {
+            clean[y] = row;
+            dirty[y] = row;
         }
+
+        // TODO also consider making read and write (or at least write) atomic
 
         /**
          * Writes a value into the dirty buffer
-         * @param x
-         * @param y
-         * @param value
+         * @param x x position
+         * @param y y position
+         * @param value value to insert
          */
-        void write(int32_t x, int32_t y, T value);
+        void write(int32_t x, int32_t y, T value) {
+            dirty[y][x] = value;
+        }
 
         /**
          * Reads a value from the snapshot grid, from the clean buffer
@@ -40,18 +62,25 @@ namespace ants {
          * @param y y position
          * @return value of type T at this position in the clean buffer
          */
-        T read(int32_t x, int32_t y);
+        T read(int32_t x, int32_t y) const {
+            return clean[y][x];
+        }
 
         /**
          * Commits the dirty buffer, i.e. replaces the current clean buffer with the current dirty
          * buffer.
          */
-        void commit();
+        void commit() {
+            for (int i = 0; i < size; i++) {
+                memcpy(clean[i], dirty[i], size * sizeof(T));
+            }
+        }
+
 
         /// Clean buffer
-        T *clean;
+        T **clean{};
         /// Dirty buffer
-        T *dirty;
+        T **dirty{};
         int32_t size{};
     };
 };

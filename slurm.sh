@@ -1,19 +1,21 @@
 #!/bin/bash -l
 #
-# TODO improve these config options so it will work better with OpenMP (see open tabs)
-#SBATCH --job-name=antsim
+#SBATCH --job-name=ant_colony
 #SBATCH --nodes=1
-#SBATCH --ntasks=2
-#SBATCH --ntasks-per-node=2
-#SBATCH --cpus-per-task=1
-#SBATCH --mem-per-cpu=5G
-#SBATCH --time=0-2:00
+#SBATCH --ntasks=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=24
+#SBATCH --mem=12GB
+#SBATCH --time=0-60:00
 #SBATCH --mail-user=SodiumSandwich@outlook.com
 #SBATCH --mail-type=ALL
+#SBATCH -e ant_colony.err
+#SBATCH -o ant_colony.out
 
 module load gnu
 module load openmpi3_eth/3.0.0
-# cuda if required
+# CUDA if required (make sure to make it run on a GPU partition then)
 
-# TODO instead of doing this use the slurm redirect options
-./ant_colony &> ant_colony.txt
+date
+echo ""
+time ./ant_colony

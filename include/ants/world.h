@@ -11,6 +11,7 @@
 #include "mini/ini.h"
 #include "tinycolor/tinycolormap.hpp"
 #include "pcg/pcg_random.hpp"
+#include "ants/snapgrid.h"
 
 namespace ants {
     struct World {
@@ -78,12 +79,10 @@ namespace ants {
         computePheromoneVector(const Colony &colony, const Ant &ant) const;
 
     private:
-        /// Grid of food tiles
-        bool **foodGrid{};
-        /// Grid of pheromone tiles
-        Pheromone ***pheromoneGrid{};
-        /// Grid of obstacles
-        bool **obstacleGrid{};
+        SnapGrid<bool> foodGrid{};
+        SnapGrid<Pheromone*> pheromoneGrid{};
+        SnapGrid<bool> obstacleGrid{};
+
         /// List of colonies
         std::vector<Colony> colonies{};
 

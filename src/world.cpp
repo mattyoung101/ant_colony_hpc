@@ -53,9 +53,9 @@ World::World(const std::string& filename, mINI::INIStructure config) {
     height = imgHeight;
 
     // construct grids, initialised with nullptr: https://stackoverflow.com/a/2204380/5007892
-    foodGrid = new bool*[height]{};
-    pheromoneGrid = new Pheromone**[height]{};
-    obstacleGrid = new bool*[height]{};
+    foodGrid = SnapGrid<bool>(height);
+    pheromoneGrid = SnapGrid<Pheromone*>(height);
+    obstacleGrid = SnapGrid<bool>(height);
 
     // mapping between each unique colour and its position
     std::unordered_map<RGBColour, Vector2i> uniqueColours{};
@@ -115,9 +115,9 @@ World::World(const std::string& filename, mINI::INIStructure config) {
         }
 
         // add the row to the grid
-        foodGrid[y] = foodRow;
-        pheromoneGrid[y] = pheromoneRow; // always empty but add it anyway
-        obstacleGrid[y] = obstacleRow;
+        foodGrid.insertRow(y, foodRow);
+        pheromoneGrid.insertRow(y, pheromoneRow); // always empty but add it anyway
+        obstacleGrid.insertRow(y, obstacleRow);
     }
 
     log_debug("Have %zu unique colours (unique colonies)", uniqueColours.size());
@@ -153,7 +153,7 @@ World::World(const std::string& filename, mINI::INIStructure config) {
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
             for (size_t colony = 0; colony < uniqueColours.size(); colony++) {
-                pheromoneGrid[y][x]->values.emplace_back(PheromoneStrength());
+                pheromoneGrid.read(x, y)->values.emplace_back(PheromoneStrength());
             }
         }
     }
@@ -175,14 +175,15 @@ World::World(const std::string& filename, mINI::INIStructure config) {
 
 World::~World() {
     // delete grid
-    DELETE_GRID(pheromoneGrid)
-    for (int y = 0; y < height; y++) {
-        delete[] obstacleGrid[y];
-    }
-    for (int y = 0; y < height; y++) {
-        delete[] foodGrid[y];
-    }
-    delete[] obstacleGrid;
+    // FIXME delete memory properly
+//    DELETE_GRID(pheromoneGrid)
+//    for (int y = 0; y < height; y++) {
+//        delete[] obstacleGrid[y];
+//    }
+//    for (int y = 0; y < height; y++) {
+//        delete[] foodGrid[y];
+//    }
+//    delete[] obstacleGrid;
 }
 
 Vector2i World::randomMovementVector(const Ant &ant) {
@@ -210,7 +211,7 @@ World::computePheromoneVector(const Colony &colony, const Ant &ant) const {
         int x = ant.pos.x + direction.x;
         int y = ant.pos.y + direction.y;
         // check if out of bounds (same check as in World::update)
-        if (x < 0 || y < 0 || x >= width || y >= height || obstacleGrid[y][x]) {
+        if (x < 0 || y < 0 || x >= width || y >= height || obstacleGrid.read(x, y)) {
             continue;
         }
         // check it's not a position we have already visited this run
@@ -221,10 +222,10 @@ World::computePheromoneVector(const Colony &colony, const Ant &ant) const {
         double strength;
         if (ant.holdingFood) {
             // ant has food, use the "to colony" strength
-            strength = pheromoneGrid[y][x]->values[colony.id].toColony;
+            strength = pheromoneGrid.read(x, y)->values[colony.id].toColony;
         } else {
             // ant doesn't have food, use the "to food" strength
-            strength = pheromoneGrid[y][x]->values[colony.id].toFood;
+            strength = pheromoneGrid.read(x, y)->values[colony.id].toFood;
         }
 
         if (strength >= bestStrength) {
@@ -261,7 +262,7 @@ void World::decayPheromones() {
 //#pragma omp for
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
-                for (auto &value: pheromoneGrid[y][x]->values) {
+                for (auto &value: pheromoneGrid.read(x, y)->values) {
                     if (fabs(fuzz) >= 0.0001) {
                         // fuzz factor is not 0, use RNG
                         // micro-optimisation: compute random value and share it across toColony and
@@ -294,7 +295,6 @@ void World::update() {
     decayPheromones();
 
     // update the ants
-    // TODO maybe we could fix some problems by having the ants **only** follow pheromones when going home?
     for (auto colony = colonies.begin(); colony != colonies.end() ; ) {
         bool colonyShouldAddMoreAnts = false;
         for (auto ant = colony->ants.begin(); ant != colony->ants.end(); ) {
@@ -305,9 +305,6 @@ void World::update() {
             // see what pheromones are around the ant
             auto [phVector, phStrength] = computePheromoneVector(*colony, *ant);
             Vector2i movement{};
-            // FIXME I think this method of choosing whether or not to follow pheromones is bad
-            //  instead, maybe it should follow randomly until it reaches food, then follow pheromones
-            //  also maybe have only first generation ants do random stuff, others should follow pheromones
             if (phStrength >= antUsePheromone) {
                 // strong pheromone, use that
                 movement = phVector;
@@ -321,8 +318,8 @@ void World::update() {
 
             // only move the ant if it wouldn't intersect an obstacle, and is in bounds
             // also don't allow ants to walk on food if they are already holding food
-            if (newX < 0 || newY < 0 || newX >= width || newY >= height || obstacleGrid[newY][newX]
-                || (ant->holdingFood && foodGrid[newY][newX])) {
+            if (newX < 0 || newY < 0 || newX >= width || newY >= height || obstacleGrid.read(newX, newY)
+                || (ant->holdingFood && foodGrid.read(newX, newY))) {
                 // reached an obstacle, flip our direction ("bounce off" the obstacle)
                 ant->preferredDir.x *= -1;
                 ant->preferredDir.y *= -1;
@@ -338,14 +335,14 @@ void World::update() {
             if (ant->holdingFood) {
                 // holding food, add to the "to food" strength, so we let other ants know where we
                 // found food
-                pheromoneGrid[ant->pos.y][ant->pos.x]->values[colony->id].toFood += pheromoneGainFactor;
+                pheromoneGrid.read(ant->pos.x, ant->pos.y)->values[colony->id].toFood += pheromoneGainFactor;
             } else {
                 // looking for food, update the "to colony" strength, so other ants know how to get home
-                pheromoneGrid[ant->pos.y][ant->pos.x]->values[colony->id].toColony += pheromoneGainFactor;
+                pheromoneGrid.read(ant->pos.x, ant->pos.y)->values[colony->id].toColony += pheromoneGainFactor;
             }
 
             // update ant state
-            if (!ant->holdingFood && foodGrid[ant->pos.y][ant->pos.x]) {
+            if (!ant->holdingFood && foodGrid.read(ant->pos.x, ant->pos.y)) {
                 // we're on food now!
                 log_debug("Ant in colony %d just found food at %d,%d", colony->id, ant->pos.x, ant->pos.y);
                 ant->holdingFood = true;
@@ -357,7 +354,7 @@ void World::update() {
                 ant->visitedPos.clear();
 
                 // remove food from the world
-                foodGrid[ant->pos.y][ant->pos.x] = false;
+                foodGrid.write(ant->pos.x, ant->pos.y, false);
             } else if (ant->holdingFood && ant->pos.distance(colony->pos) <= colonyReturnDist) {
                 // got our food and returned home (near enough to the colony)
                 log_debug("Ant in colony %d just returned home with food", colony->id);
@@ -386,6 +383,8 @@ void World::update() {
             }
         }
 
+        // TODO we may need to run below code at the end (like with SnapGrid) to keep behaviour consistent
+
         // continuing on above from the terrible hack required due to C++
         if (colonyShouldAddMoreAnts) {
             log_debug("Adding more ants to colony id %d", colony->id);
@@ -402,7 +401,6 @@ void World::update() {
 
         // update colony hunger
         colony->hunger -= colonyHungerDrain;
-        // FIXME consider if we want to get rid of this (only put in colour code) and allow ants to "stockpile"
         colony->hunger = std::clamp(colony->hunger, 0.0, 1.0);
 
         // kill the colony if the hunger meter has expired, or all its ants have died
@@ -419,6 +417,11 @@ void World::update() {
             maxAnts = antsAlive;
         }
     }
+
+    // commit values to snapshot grid
+    foodGrid.commit();
+    pheromoneGrid.commit();
+    obstacleGrid.commit();
 }
 
 static std::string generateFileName(const std::string &prefix) {
@@ -496,12 +499,12 @@ std::vector<uint8_t> World::renderWorldUncompressed() const {
     // TODO OpenMP this (may not be easy, we can't use push_back)
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
-            if (foodGrid[y][x]) {
+            if (foodGrid.read(x, y)) {
                 // pixel is food, output green
                 out.push_back(0); // R
                 out.push_back(255); // G
                 out.push_back(0); // B
-            } else if (obstacleGrid[y][x]) {
+            } else if (obstacleGrid.read(x, y)) {
                 // pixel is obstacle, output grey
                 out.push_back(128);
                 out.push_back(128);
@@ -510,7 +513,7 @@ std::vector<uint8_t> World::renderWorldUncompressed() const {
                 // not a food or obstacle, so we'll juts write the pheromone value in the colour map
                 // we tinycolormap and matplotlib's inferno colour map to make the output more
                 // visually interesting
-                auto pheromone = pheromoneGrid[y][x]->getColourValue();
+                auto pheromone = pheromoneGrid.read(x, y)->getColourValue();
 
                 auto colour = tinycolormap::GetInfernoColor(pheromone);
                 out.push_back(colour.ri());

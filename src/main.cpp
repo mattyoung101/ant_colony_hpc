@@ -66,7 +66,6 @@ int main(int argc, char *argv[]) {
     // load the world into memory
     auto world = World(config["Simulation"]["grid_file"], config);
 
-
     // setup recording
     bool recordingEnabled = config["Simulation"]["recording_enabled"] == "true";
     if (recordingEnabled) {
