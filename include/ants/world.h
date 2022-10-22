@@ -25,10 +25,11 @@ namespace ants {
 
         World() = default;
 
-        ~World();
+        ~World() = default;
 
         /// Updates the world for one time step
-        void update();
+        /// @return true if we should keep iterating the simulation, false if we should quit now
+        [[nodiscard]] bool update();
 
         /**
          * Sets up PNG TAR disk output. PNG files are written to a TAR file that can then be downloaded
@@ -78,10 +79,13 @@ namespace ants {
         [[nodiscard]] std::pair<Vector2i, double>
         computePheromoneVector(const Colony &colony, const Ant &ant) const;
 
+        size_t maxAntsLastTick{};
     private:
-        SnapGrid<bool> foodGrid{};
-        SnapGrid<Pheromone*> pheromoneGrid{};
-        SnapGrid<bool> obstacleGrid{};
+        SnapGrid2D<bool> foodGrid{};
+        SnapGrid2D<Pheromone*> pheromoneGrid{};
+        SnapGrid2D<bool> obstacleGrid{};
+
+        SnapGrid2D<SnapGrid2D<Pheromone>> test{};
 
         /// List of colonies
         std::vector<Colony> colonies{};
@@ -102,6 +106,9 @@ namespace ants {
 
         double colonyHungerDrain{}, colonyHungerReplenish{};
         int32_t colonyAntsPerTick{}, colonyReturnDist{};
+
+        /// number of food tiles left for the ants
+        int32_t foodRemaining{};
 
         /// PNG TAR output file
         mtar_t tarfile{};

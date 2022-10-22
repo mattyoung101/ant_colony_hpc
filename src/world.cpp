@@ -53,9 +53,9 @@ World::World(const std::string& filename, mINI::INIStructure config) {
     height = imgHeight;
 
     // construct grids, initialised with nullptr: https://stackoverflow.com/a/2204380/5007892
-    foodGrid = SnapGrid<bool>(height);
-    pheromoneGrid = SnapGrid<Pheromone*>(height);
-    obstacleGrid = SnapGrid<bool>(height);
+    foodGrid = SnapGrid2D<bool>(height);
+    pheromoneGrid = SnapGrid2D<Pheromone*>(height);
+    obstacleGrid = SnapGrid2D<bool>(height);
 
     // mapping between each unique colour and its position
     std::unordered_map<RGBColour, Vector2i> uniqueColours{};
@@ -105,6 +105,7 @@ World::World(const std::string& filename, mINI::INIStructure config) {
             } else if (r == 0 && g == 255 && b == 0) {
                 // green, food
                 foodRow[x] = true;
+                foodRemaining++;
             } else if (r == 128 && g == 128 && b == 128) {
                 // grey, obstacle
                 obstacleRow[x] = true;
@@ -171,19 +172,6 @@ World::World(const std::string& filename, mINI::INIStructure config) {
     colonyReturnDist = std::stoi(config["Colony"]["return_distance"]);
 
     stbi_image_free(image);
-}
-
-World::~World() {
-    // delete grid
-    // FIXME delete memory properly
-//    DELETE_GRID(pheromoneGrid)
-//    for (int y = 0; y < height; y++) {
-//        delete[] obstacleGrid[y];
-//    }
-//    for (int y = 0; y < height; y++) {
-//        delete[] foodGrid[y];
-//    }
-//    delete[] obstacleGrid;
 }
 
 Vector2i World::randomMovementVector(const Ant &ant) {
@@ -285,14 +273,20 @@ void World::decayPheromones() {
     }
 }
 
-void World::update() {
+bool World::update() {
     size_t antsAlive = 0;
+    bool shouldContinue = true;
+    maxAntsLastTick = 0;
     // so that we don't kill all the ants at once (which looks weird), add some extra noise to the
     // time we might kill them
     std::uniform_int_distribution<int> antKillNoise(0, 75);
-
     // decay pheromones not in use
     decayPheromones();
+
+    // colonies that need ants to be added to
+    std::vector<Colony> colonyAddAnts{};
+    // colonies that need deleting
+    std::vector<Colony> colonyDelete{};
 
     // update the ants
     for (auto colony = colonies.begin(); colony != colonies.end() ; ) {
@@ -332,6 +326,7 @@ void World::update() {
             }
 
             // update world
+            // FIXME this should really be a write, not a read, do we need nested snapgrids?
             if (ant->holdingFood) {
                 // holding food, add to the "to food" strength, so we let other ants know where we
                 // found food
@@ -355,6 +350,7 @@ void World::update() {
 
                 // remove food from the world
                 foodGrid.write(ant->pos.x, ant->pos.y, false);
+                foodRemaining--;
             } else if (ant->holdingFood && ant->pos.distance(colony->pos) <= colonyReturnDist) {
                 // got our food and returned home (near enough to the colony)
                 log_debug("Ant in colony %d just returned home with food", colony->id);
@@ -374,6 +370,8 @@ void World::update() {
             if (!ant->holdingFood) {
                 ant->ticksSinceLastUseful++;
             }
+
+            // TODO this should run at the end of the loop as well (or make vector atomic)
             // possibly kill this ant if its time has expired (+ some noise)
             if (ant->ticksSinceLastUseful > antKillNotUseful + antKillNoise(rng)) {
                 log_debug("Ant in colony id %d has died at %d,%d", colony->id, ant->pos.x, ant->pos.y);
@@ -416,12 +414,24 @@ void World::update() {
         if (antsAlive > maxAnts) {
             maxAnts = antsAlive;
         }
+        if (antsAlive > maxAntsLastTick) {
+            maxAntsLastTick = antsAlive;
+        }
     }
 
     // commit values to snapshot grid
     foodGrid.commit();
     pheromoneGrid.commit();
     obstacleGrid.commit();
+
+    if (antsAlive <= 0) {
+        log_info("All ants have died");
+        shouldContinue = false;
+    } else if (foodRemaining <= 0) {
+        log_info("All food has been eaten");
+        shouldContinue = false;
+    }
+    return shouldContinue;
 }
 
 static std::string generateFileName(const std::string &prefix) {
@@ -451,7 +461,6 @@ void World::setupRecording(const std::string &prefix) {
 void World::writeRecordingStatistics(uint32_t numTicks, TimeInfo wallTime, TimeInfo simTime) {
     if (!tarfileOk)
         return;
-
     std::ostringstream oss;
     // clang-format off
     oss << "========== Statistics ==========\n"

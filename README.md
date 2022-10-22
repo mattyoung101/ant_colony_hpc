@@ -43,9 +43,11 @@ See the report for most of this. In future, I'll document it more here.
   - Random numbers are loaded from a file using `dump_random.cpp`, which is in turned still backed by PCG
   - This is done because profiling showed generating random numbers was one of the slowest parts of the program
 - (TODO planned) Used AVX intrinsics for subtraction in `World::decayPheromones`
-- (TODO planned) Used locked grid structure during updates based on `CowGrid`
+- Used locked grid structure during updates, the `SnapGrid`
 - (TODO planned) Parallelised individual ant updates using (either OpenMP or MPI - very unlikely but possibly CUDA)
 - (TODO planned) Parallelised the loop in `World::decayPheromones`
+- Simulation stops early if all ants die, or all food is eaten
+- The delta time of each simulation step, and the number of ants in that step, are measured and logged
 
 ## Attribution
 The following open source libraries are used:

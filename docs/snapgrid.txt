@@ -1,0 +1,5 @@
+    // TODO new snapgrid idea
+    SnapGrid<SnapGrid<double>> poggers{};
+    //      [coordinate    ]     [colony id]  [0=toColony, 1=toFood]
+    poggers.read(0, 1).read(0,       0);
+    // TODO it would be a better idea to make a 2D and 3D snapgrid (e.g. SnapGrid2D and SnapGrid3D, maybe a template)

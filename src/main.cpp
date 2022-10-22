@@ -84,24 +84,32 @@ int main(int argc, char *argv[]) {
     std::vector<std::vector<uint8_t>> images{};
     images.reserve(numTicks);
 
+    std::ostringstream antTimeData;
+    antTimeData << "NumAnts,TimeMs\n";
     for (uint32_t i = 0; i < numTicks; i++) {
         log_trace("Iteration %u", i);
 
         auto simTimeBegin = std::chrono::steady_clock::now();
-        world.update();
+        bool shouldContinue = world.update();
         auto simTimeEnd = std::chrono::steady_clock::now();
         simTimeMs += COUNT_MS(simTimeEnd, simTimeBegin);
+        antTimeData << world.maxAntsLastTick << "," << COUNT_MS(simTimeEnd, simTimeBegin) << "\n";
 
         // render world and add to uncompressed queue
-        if (recordingEnabled)
+        if (recordingEnabled) {
             images.emplace_back(world.renderWorldUncompressed());
+        }
+        // check early exit
+        if (!shouldContinue) {
+            log_info("Performing early exit now on iteration %d", i);
+            break;
+        }
     }
 
     // go over each uncompressed image and compress it to the TAR file
     if (recordingEnabled) {
         size_t totalBytes = 0;
         log_info("Finalising PNG output (%zu images)", images.size());
-        // TODO OpenMP this
         for (size_t i = 0; i < images.size(); i++) {
             auto image = images[i];
             totalBytes += image.size();
@@ -119,7 +127,6 @@ int main(int argc, char *argv[]) {
         }
         log_info("Uncompressed image RAM usage was %zu MiB", totalBytes / BYTES2MIB);
     }
-
     log_info("Simulation done!");
 
     // record times
@@ -131,6 +138,8 @@ int main(int argc, char *argv[]) {
     // finalise recording
     world.writeRecordingStatistics(numTicks, TimeInfo(wallTimeMs, wallFps),
                                    TimeInfo(simTimeMs, simFps));
+    std::string antTime = antTimeData.str();
+    world.writeToTar("ants_vs_time.csv", (uint8_t *) antTime.c_str(), antTime.size());
     world.finaliseRecording();
 
     log_info("Wall time: %.3f ms (%.3f ticks per second)", wallTimeMs, wallFps);
