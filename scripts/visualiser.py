@@ -4,6 +4,7 @@ import time
 import tarfile
 import cv2
 import numpy as np
+import readline
 
 # Desired milliseconds between each frame
 FRAME_MS = 25.0

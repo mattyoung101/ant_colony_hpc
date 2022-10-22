@@ -54,7 +54,7 @@ World::World(const std::string& filename, mINI::INIStructure config) {
 
     // construct grids, initialised with nullptr: https://stackoverflow.com/a/2204380/5007892
     foodGrid = SnapGrid2D<bool>(height);
-    pheromoneGrid = SnapGrid2D<Pheromone*>(height);
+    pheromoneGrid = SnapGrid3D<PheromoneStrength>(height);
     obstacleGrid = SnapGrid2D<bool>(height);
 
     // mapping between each unique colour and its position
@@ -85,10 +85,6 @@ World::World(const std::string& filename, mINI::INIStructure config) {
     fclose(randomBin);
 
     for (int32_t y = 0; y < imgHeight; y++) {
-        auto *foodRow = new bool[width]{};
-        auto **pheromoneRow = new Pheromone*[width]{};
-        auto *obstacleRow = new bool[width]{};
-
         for (int32_t x = 0; x < imgWidth; x++) {
             // https://www.reddit.com/r/opengl/comments/8gyyb6/comment/dygokra/
             uint8_t *p = image + (channels * (y * imgWidth + x));
@@ -96,30 +92,24 @@ World::World(const std::string& filename, mINI::INIStructure config) {
             uint8_t g = p[1];
             uint8_t b = p[2];
 
-            // pheromone always gets added
-            pheromoneRow[x] = new Pheromone();
-
             if (r == 0 && g == 0 && b == 0) {
                 // black, empty square, skip
                 continue;
             } else if (r == 0 && g == 255 && b == 0) {
                 // green, food
-                foodRow[x] = true;
+                foodGrid.write(x, y, true);
                 foodRemaining++;
             } else if (r == 128 && g == 128 && b == 128) {
                 // grey, obstacle
-                obstacleRow[x] = true;
+                obstacleGrid.write(x, y, true);
             } else {
                 // colony; store mapping between its unique colour and position
                 uniqueColours[RGBColour(r, g, b)] = Vector2i(x, y);
             }
         }
-
-        // add the row to the grid
-        foodGrid.insertRow(y, foodRow);
-        pheromoneGrid.insertRow(y, pheromoneRow); // always empty but add it anyway
-        obstacleGrid.insertRow(y, obstacleRow);
     }
+    foodGrid.commit();
+    obstacleGrid.commit();
 
     log_debug("Have %zu unique colours (unique colonies)", uniqueColours.size());
 
@@ -147,16 +137,6 @@ World::World(const std::string& filename, mINI::INIStructure config) {
             colony.ants.emplace_back(ant);
         }
         colonies.emplace_back(colony);
-    }
-
-    // fix up pheromone grid using knowledge from above: each pheromone tile needs to have an entry
-    // for all of the above colonies
-    for (int y = 0; y < height; y++) {
-        for (int x = 0; x < width; x++) {
-            for (size_t colony = 0; colony < uniqueColours.size(); colony++) {
-                pheromoneGrid.read(x, y)->values.emplace_back(PheromoneStrength());
-            }
-        }
     }
 
     // load INI values
@@ -210,10 +190,10 @@ World::computePheromoneVector(const Colony &colony, const Ant &ant) const {
         double strength;
         if (ant.holdingFood) {
             // ant has food, use the "to colony" strength
-            strength = pheromoneGrid.read(x, y)->values[colony.id].toColony;
+            strength = pheromoneGrid.read(x, y, colony.id).toColony;
         } else {
             // ant doesn't have food, use the "to food" strength
-            strength = pheromoneGrid.read(x, y)->values[colony.id].toFood;
+            strength = pheromoneGrid.read(x, y, colony.id).toFood;
         }
 
         if (strength >= bestStrength) {
@@ -250,27 +230,32 @@ void World::decayPheromones() {
 //#pragma omp for
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
-                for (auto &value: pheromoneGrid.read(x, y)->values) {
+                for (int c = 0; c < static_cast<int>(colonies.size()); c++) {
+                    auto cur = pheromoneGrid.read(x, y, c);
                     if (fabs(fuzz) >= 0.0001) {
                         // fuzz factor is not 0, use RNG
                         // micro-optimisation: compute random value and share it across toColony and
                         // toFood, instead of computing it twice
                         auto randomness = fuzzDist(localRng);
-                        value.toColony -= pheromoneDecayFactor + randomness;
-                        value.toFood -= pheromoneDecayFactor + randomness;
+                        cur.toColony -= pheromoneDecayFactor + randomness;
+                        cur.toFood -= pheromoneDecayFactor + randomness;
                     } else {
                         // fuzz factor is 0, don't use RNG
-                        value.toColony -= pheromoneDecayFactor;
-                        value.toFood -= pheromoneDecayFactor;
+                        cur.toColony -= pheromoneDecayFactor;
+                        cur.toFood -= pheromoneDecayFactor;
                     }
 
                     // clamp so it doesn't go below zero or above 1.0
-                    value.toColony = std::clamp(value.toColony, 0.0, 1.0);
-                    value.toFood = std::clamp(value.toFood, 0.0, 1.0);
+                    cur.toColony = std::clamp(cur.toColony, 0.0, 1.0);
+                    cur.toFood = std::clamp(cur.toFood, 0.0, 1.0);
+                    // send it back to the grid
+                    pheromoneGrid.write(x, y, c, cur);
                 }
             }
         }
     }
+    // force a commit to update the world when this routine is done
+    pheromoneGrid.commit();
 }
 
 bool World::update() {
@@ -326,14 +311,17 @@ bool World::update() {
             }
 
             // update world
-            // FIXME this should really be a write, not a read, do we need nested snapgrids?
             if (ant->holdingFood) {
                 // holding food, add to the "to food" strength, so we let other ants know where we
                 // found food
-                pheromoneGrid.read(ant->pos.x, ant->pos.y)->values[colony->id].toFood += pheromoneGainFactor;
+                auto cur = pheromoneGrid.read(ant->pos.x, ant->pos.y, colony->id);
+                cur.toFood += pheromoneGainFactor;
+                pheromoneGrid.write(ant->pos.x, ant->pos.y, colony->id, cur);
             } else {
                 // looking for food, update the "to colony" strength, so other ants know how to get home
-                pheromoneGrid.read(ant->pos.x, ant->pos.y)->values[colony->id].toColony += pheromoneGainFactor;
+                auto cur = pheromoneGrid.read(ant->pos.x, ant->pos.y, colony->id);
+                cur.toColony += pheromoneGainFactor;
+                pheromoneGrid.write(ant->pos.x, ant->pos.y, colony->id, cur);
             }
 
             // update ant state
@@ -499,6 +487,27 @@ void World::finaliseRecording() {
     log_info("Max ants alive: %zu", maxAnts);
 }
 
+double World::pheromoneToColour(int32_t x, int32_t y) const {
+    // average over all the colonies of whichever is higher, to food or to colony
+//#define FACTOR 3.0
+//    double sum = 0.0;
+//    double count = 0.0;
+//    for (const auto &item : values) {
+//        sum += std::max(item.toFood, item.toColony);
+//        count += 1.0;
+//    }
+//    return std::clamp((sum / count) * FACTOR, 0.0, 1.0);
+    // max over all the colonies of whichever is higher, to food or to colony
+    double bestStrength = -9999.0;
+    for (int c = 0; c < static_cast<int>(colonies.size()); c++) {
+        double strength = std::max(pheromoneGrid.read(x, y, c).toFood, pheromoneGrid.read(x, y, c).toColony);
+        if (strength > bestStrength) {
+            bestStrength = strength;
+        }
+    }
+    return bestStrength;
+}
+
 std::vector<uint8_t> World::renderWorldUncompressed() const {
     // pixel format is {R,G,B,R,G,B,...}
     std::vector<uint8_t> out{};
@@ -522,7 +531,7 @@ std::vector<uint8_t> World::renderWorldUncompressed() const {
                 // not a food or obstacle, so we'll juts write the pheromone value in the colour map
                 // we tinycolormap and matplotlib's inferno colour map to make the output more
                 // visually interesting
-                auto pheromone = pheromoneGrid.read(x, y)->getColourValue();
+                auto pheromone = pheromoneToColour(x, y);
 
                 auto colour = tinycolormap::GetInfernoColor(pheromone);
                 out.push_back(colour.ri());

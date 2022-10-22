@@ -15,11 +15,6 @@
 
 namespace ants {
     struct World {
-        /// Grid sizes
-        int32_t width{};
-        /// Grid sizes
-        int32_t height{};
-
         /// Instantiates a world from the given PNG file as per specifications
         explicit World(const std::string &filename, mINI::INIStructure config);
 
@@ -60,6 +55,10 @@ namespace ants {
         /// Renders the current world to an uncompressed RGB pixel buffer.
         [[nodiscard]] std::vector<uint8_t> renderWorldUncompressed() const;
 
+        size_t maxAntsLastTick{};
+        int32_t width{};
+        int32_t height{};
+    private:
         /// Returns a random movement vector for the specified ant
         Vector2i randomMovementVector(const Ant &ant);
 
@@ -70,22 +69,20 @@ namespace ants {
          * Calculates the strongest direction vector, and its strength, based on the pheromones
          * surrounding the ant.
          * The output vector will depend on the mode of the ant (i.e. to food or to colony).
-         * @param searchWidth width on each side of a square to search for pheromones in; see antconfig.ini
-         * and docs/phermone_search_width_2.jpg for an explanation.
          * @param colony colony the ant belongs to
          * @param ant the ant to consider
-         * @return a pair: first value is the strongest direction, second value is the strength
+         * @return pair: first value is the strongest direction, second value is the strength
          */
-        [[nodiscard]] std::pair<Vector2i, double>
-        computePheromoneVector(const Colony &colony, const Ant &ant) const;
+        [[nodiscard]] std::pair<Vector2i, double> computePheromoneVector(const Colony &colony, const Ant &ant) const;
 
-        size_t maxAntsLastTick{};
-    private:
+        /// Renders a pheromone to a colour value. Returns the colour value between 0.0 and 1.0.
+        [[nodiscard]] double pheromoneToColour(int32_t x, int32_t y) const;
+
+
         SnapGrid2D<bool> foodGrid{};
-        SnapGrid2D<Pheromone*> pheromoneGrid{};
+        /// indexes are x, y, colony
+        SnapGrid3D<PheromoneStrength> pheromoneGrid{};
         SnapGrid2D<bool> obstacleGrid{};
-
-        SnapGrid2D<SnapGrid2D<Pheromone>> test{};
 
         /// List of colonies
         std::vector<Colony> colonies{};

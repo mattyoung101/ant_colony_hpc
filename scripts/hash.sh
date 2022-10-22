@@ -5,8 +5,9 @@ TMPDIR=$(mktemp -d /tmp/ants_XXXXXXXX)
 
 echo "Extracting tar $1 to $TMPDIR"
 tar -xf "$1" -C "$TMPDIR"
-# remove the stats file because that changes when image data doesn't
+# !!!!!!!!!!!!!! ANY ADDITIONAL FILES YOU ADD, YOU MUST ADD THEM HERE TO EXCLUDE FROM THE HASH !!!!!!!!!!!!!!!!!!!!!
 rm $TMPDIR/stats.txt
+rm $TMPDIR/ants_vs_time.csv
 
 echo "Processing"
 cd $TMPDIR
