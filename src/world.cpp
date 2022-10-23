@@ -20,17 +20,6 @@
 #include "clip/clip.h"
 #include "concqueue/concurrentqueue.h"
 
-/// Macro to assist in freeing grids
-#define DELETE_GRID(grid) do { \
-for (int y = 0; y < height; y++) { \
-    for (int  x = 0; x < width; x++) { \
-        delete (grid)[y][x]; \
-    } \
-    delete[] (grid)[y]; \
-} \
-delete[] (grid); \
-} while (0); \
-
 using namespace ants;
 
 static const Vector2i directions[] = {Vector2i(-1, -1), Vector2i(-1, 0), Vector2i(-1, 1),
@@ -38,6 +27,7 @@ static const Vector2i directions[] = {Vector2i(-1, -1), Vector2i(-1, 0), Vector2
                                       Vector2i(1, -1), Vector2i(1, 0), Vector2i(1, 1)};
 static std::uniform_int_distribution<int> indexDist(0, 7);
 static size_t maxAnts = 0;
+static uint64_t antId = 0;
 
 World::World(const std::string& filename, mINI::INIStructure config) {
     log_info("Creating world from PNG %s", filename.c_str());
@@ -98,7 +88,6 @@ World::World(const std::string& filename, mINI::INIStructure config) {
             } else if (r == 0 && g == 255 && b == 0) {
                 // green, food
                 foodGrid.write(x, y, true);
-                foodRemaining++;
             } else if (r == 128 && g == 128 && b == 128) {
                 // grey, obstacle
                 obstacleGrid.write(x, y, true);
@@ -110,7 +99,6 @@ World::World(const std::string& filename, mINI::INIStructure config) {
     }
     foodGrid.commit();
     obstacleGrid.commit();
-
     log_debug("Have %zu unique colours (unique colonies)", uniqueColours.size());
 
     // setup colonies
@@ -134,6 +122,7 @@ World::World(const std::string& filename, mINI::INIStructure config) {
             ant.pos = pos;
             // preferred movement direction for when moving randomly
             ant.preferredDir = directions[indexDist(rng)];
+            ant.id = antId++;
             colony.ants.emplace_back(ant);
         }
         colonies.emplace_back(colony);
@@ -209,10 +198,6 @@ void World::decayPheromones() {
     // decay pheromones at a slightly different rate
     // - this massively slows down the sim (by at least 6x in release build)
     // - improves behaviour significantly
-
-    // TODO compute these random numbers offline, compress (maybe), and reload them
-    //  then AVX it
-
     double fuzz = pheromoneFuzzFactor * pheromoneDecayFactor;
     std::uniform_real_distribution<double> fuzzDist(-fuzz, fuzz);
 
@@ -231,6 +216,11 @@ void World::decayPheromones() {
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
                 for (int c = 0; c < static_cast<int>(colonies.size()); c++) {
+                    // skip dead colonies to save doing extra work
+                    if (colonies[c].isDead) {
+                        continue;
+                    }
+
                     auto cur = pheromoneGrid.read(x, y, c);
                     if (fabs(fuzz) >= 0.0001) {
                         // fuzz factor is not 0, use RNG
@@ -244,7 +234,6 @@ void World::decayPheromones() {
                         cur.toColony -= pheromoneDecayFactor;
                         cur.toFood -= pheromoneDecayFactor;
                     }
-
                     // clamp so it doesn't go below zero or above 1.0
                     cur.toColony = std::clamp(cur.toColony, 0.0, 1.0);
                     cur.toFood = std::clamp(cur.toFood, 0.0, 1.0);
@@ -254,7 +243,7 @@ void World::decayPheromones() {
             }
         }
     }
-    // force a commit to update the world when this routine is done
+    // force a commit, because we do want the world do be updated when this routine returns
     pheromoneGrid.commit();
 }
 
@@ -262,6 +251,8 @@ bool World::update() {
     size_t antsAlive = 0;
     bool shouldContinue = true;
     maxAntsLastTick = 0;
+    int foodRemaining = 0;
+
     // so that we don't kill all the ants at once (which looks weird), add some extra noise to the
     // time we might kill them
     std::uniform_int_distribution<int> antKillNoise(0, 75);
@@ -269,14 +260,21 @@ bool World::update() {
     decayPheromones();
 
     // colonies that need ants to be added to
-    std::vector<Colony> colonyAddAnts{};
-    // colonies that need deleting
-    std::vector<Colony> colonyDelete{};
+    std::vector<Colony*> colonyAddAnts{};
 
     // update the ants
-    for (auto colony = colonies.begin(); colony != colonies.end() ; ) {
-        bool colonyShouldAddMoreAnts = false;
-        for (auto ant = colony->ants.begin(); ant != colony->ants.end(); ) {
+    for (size_t c = 0; c < colonies.size(); c++) {
+        auto colony = &colonies[c];
+        // skip dead colonies
+        if (colony->isDead) {
+            continue;
+        }
+        for (size_t a = 0; a < colony->ants.size(); a++) {
+            auto ant = &colony->ants[a];
+            // skip dead ants
+            if (ant->isDead) {
+                continue;
+            }
             // position the ant might move to
             auto newX = ant->pos.x;
             auto newY = ant->pos.y;
@@ -327,7 +325,7 @@ bool World::update() {
             // update ant state
             if (!ant->holdingFood && foodGrid.read(ant->pos.x, ant->pos.y)) {
                 // we're on food now!
-                log_debug("Ant in colony %d just found food at %d,%d", colony->id, ant->pos.x, ant->pos.y);
+                log_trace("Ant id %lu in colony %d just found food at %d,%d", ant->id, colony->id, ant->pos.x, ant->pos.y);
                 ant->holdingFood = true;
                 ant->ticksSinceLastUseful = 0;
                 // since the ant has reached food, invert its direction for heading back
@@ -338,52 +336,30 @@ bool World::update() {
 
                 // remove food from the world
                 foodGrid.write(ant->pos.x, ant->pos.y, false);
-                foodRemaining--;
             } else if (ant->holdingFood && ant->pos.distance(colony->pos) <= colonyReturnDist) {
                 // got our food and returned home (near enough to the colony)
-                log_debug("Ant in colony %d just returned home with food", colony->id);
+                log_trace("Ant id %lu in colony %d just returned home with food", ant->id, colony->id);
                 ant->holdingFood = false;
                 ant->ticksSinceLastUseful = 0;
                 ant->visitedPos.clear();
 
                 // boost the colony
                 colony->hunger += colonyHungerReplenish;
-                // due to the fact that C++ is by far the worst programming language known to man,
-                // we cannot insert into a vector while iterating over it, no matter what iterator
-                // paradigm is used. so, this hack is required (see below for the rest of it)
-                colonyShouldAddMoreAnts = true;
+                colonyAddAnts.emplace_back(colony);
             }
-
             // update ticks since last useful
             if (!ant->holdingFood) {
                 ant->ticksSinceLastUseful++;
             }
 
-            // TODO this should run at the end of the loop as well (or make vector atomic)
-            // possibly kill this ant if its time has expired (+ some noise)
+            // possibly kill this ant if its time has expired (+ some noise, to give it a little extra shot
+            // at life)
             if (ant->ticksSinceLastUseful > antKillNotUseful + antKillNoise(rng)) {
-                log_debug("Ant in colony id %d has died at %d,%d", colony->id, ant->pos.x, ant->pos.y);
-                ant = colony->ants.erase(ant);
-            } else {
-                ant++;
+                log_trace("Ant id %lu in colony %d has died at %d,%d", ant->id, colony->id, ant->pos.x, ant->pos.y);
+                ant->isDead = true;
             }
         }
-
-        // TODO we may need to run below code at the end (like with SnapGrid) to keep behaviour consistent
-
-        // continuing on above from the terrible hack required due to C++
-        if (colonyShouldAddMoreAnts) {
-            log_debug("Adding more ants to colony id %d", colony->id);
-            for (int i = 0; i < colonyAntsPerTick; i++) {
-                Ant newAnt{};
-                newAnt.holdingFood = false;
-                // newAnt starts at the centre of colony
-                newAnt.pos = colony->pos;
-                // preferred movement direction for when moving randomly
-                newAnt.preferredDir = directions[indexDist(rng)];
-                colony->ants.emplace_back(newAnt);
-            }
-        }
+        // end each ant in colony loop
 
         // update colony hunger
         colony->hunger -= colonyHungerDrain;
@@ -391,14 +367,13 @@ bool World::update() {
 
         // kill the colony if the hunger meter has expired, or all its ants have died
         if (colony->hunger <= 0 || colony->ants.empty()) {
-            log_debug("Colony id %d has died! (hunger=%.2f, ants=%zu)", colony->id, colony->hunger,
+            log_trace("Colony id %d has died! (hunger=%.2f, ants=%zu)", colony->id, colony->hunger,
                       colony->ants.size());
-            colony = colonies.erase(colony);
+            colony->isDead = true;
         } else {
+            // colony has not died, so add to the ants alive count
             antsAlive += colony->ants.size();
-            colony++;
         }
-
         if (antsAlive > maxAnts) {
             maxAnts = antsAlive;
         }
@@ -406,12 +381,37 @@ bool World::update() {
             maxAntsLastTick = antsAlive;
         }
     }
+    // end each colony loop
 
+    // serial code that needs to be done after the loop begins here
+    for (auto colony : colonyAddAnts) {
+        log_trace("Adding more ants to colony id %d", colony->id);
+        for (int i = 0; i < colonyAntsPerTick; i++) {
+            Ant newAnt{};
+            newAnt.holdingFood = false;
+            // newAnt starts at the centre of colony
+            newAnt.pos = colony->pos;
+            // preferred movement direction for when moving randomly
+            newAnt.preferredDir = directions[indexDist(rng)];
+            newAnt.id = antId++;
+            colony->ants.emplace_back(newAnt);
+        }
+    }
     // commit values to snapshot grid
     foodGrid.commit();
     pheromoneGrid.commit();
     obstacleGrid.commit();
 
+    // count food remaining TODO optimise this with AVX
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            if (foodGrid.read(x, y)) {
+                foodRemaining++;
+            }
+        }
+    }
+
+    // tell main.cpp if we should loop again or not
     if (antsAlive <= 0) {
         log_info("All ants have died");
         shouldContinue = false;
@@ -465,7 +465,7 @@ void World::writeRecordingStatistics(uint32_t numTicks, TimeInfo wallTime, TimeI
 
 void World::finaliseRecording() {
     if (tarfileOk) {
-        log_debug("Finalising TAR file in %s", recordingPath.c_str());
+        log_info("Finalising TAR file in %s", recordingPath.c_str());
         mtar_finalize(&tarfile);
         mtar_close(&tarfile);
 
@@ -475,10 +475,10 @@ void World::finaliseRecording() {
         uid_t uid = geteuid();
         struct passwd *pw = getpwuid(uid);
         if (pw != nullptr && strcmp(pw->pw_name, "matt") == 0) {
-            log_debug("Copied path to clipboard for development");
+            log_info("Copied path to clipboard for development");
             clip::set_text(recordingPath);
         } else if (pw == nullptr) {
-            log_debug("Failed to getpwuid: %s", strerror(errno));
+            log_info("Failed to getpwuid: %s", strerror(errno));
         }
     } else {
         log_info("PNG TAR recording not initialised, so not being finalised");
@@ -532,7 +532,6 @@ std::vector<uint8_t> World::renderWorldUncompressed() const {
                 // we tinycolormap and matplotlib's inferno colour map to make the output more
                 // visually interesting
                 auto pheromone = pheromoneToColour(x, y);
-
                 auto colour = tinycolormap::GetInfernoColor(pheromone);
                 out.push_back(colour.ri());
                 out.push_back(colour.gi());
@@ -544,7 +543,13 @@ std::vector<uint8_t> World::renderWorldUncompressed() const {
     int channels = 3;
     // render ants and colony on top of world
     for (const auto &colony : colonies) {
+        if (colony.isDead) {
+            continue;
+        }
         for (const auto &ant : colony.ants) {
+            if (ant.isDead) {
+                continue;
+            }
             // ants are the same colour as their colony
             int y = ant.pos.y;
             int x = ant.pos.x;

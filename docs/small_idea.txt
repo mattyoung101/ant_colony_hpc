@@ -1,0 +1,2 @@
+// possible speed improvements:
+//  - store ants in a global ant array and associate that with a colony, rather than nesting it

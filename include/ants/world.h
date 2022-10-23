@@ -104,9 +104,6 @@ namespace ants {
         double colonyHungerDrain{}, colonyHungerReplenish{};
         int32_t colonyAntsPerTick{}, colonyReturnDist{};
 
-        /// number of food tiles left for the ants
-        int32_t foodRemaining{};
-
         /// PNG TAR output file
         mtar_t tarfile{};
         /// true if PNG TAR recording initialised successfully

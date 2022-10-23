@@ -39,7 +39,7 @@ static void writeFunc(void *context, void *data, int size) {
 }
 
 int main(int argc, char *argv[]) {
-    log_set_level(LOG_TRACE);
+    log_set_level(LOG_DEBUG);
     log_info("COSC3500 Ant Simulator - Matt Young, 2022");
 
     // initialise OpenMP
@@ -87,7 +87,7 @@ int main(int argc, char *argv[]) {
     std::ostringstream antTimeData;
     antTimeData << "NumAnts,TimeMs\n";
     for (uint32_t i = 0; i < numTicks; i++) {
-        log_trace("Iteration %u", i);
+        log_debug("Iteration %u", i);
 
         auto simTimeBegin = std::chrono::steady_clock::now();
         bool shouldContinue = world.update();
@@ -125,7 +125,7 @@ int main(int argc, char *argv[]) {
             // source: https://solarianprogrammer.com/2019/06/10/c-programming-reading-writing-images-stb_image-libraries/
             stbi_write_png_to_func(writeFunc, &context, w, h, 3, image.data(), w * 3);
         }
-        log_info("Uncompressed image RAM usage was %zu MiB", totalBytes / BYTES2MIB);
+        log_debug("Uncompressed image RAM usage was %zu MiB", totalBytes / BYTES2MIB);
     }
     log_info("Simulation done!");
 

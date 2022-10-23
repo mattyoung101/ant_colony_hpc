@@ -4,10 +4,11 @@ import time
 import tarfile
 import cv2
 import numpy as np
+# TODO support readline
 import readline
 
 # Desired milliseconds between each frame
-FRAME_MS = 25.0
+FRAME_MS = 10.0
 # Factor to resize the images by, 1.0 = same size
 SCALE_FACTOR = 5.0
 

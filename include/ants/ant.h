@@ -17,5 +17,17 @@ namespace ants {
         /// Set of positions we visited since the last state change
         /// If we don't have this, ants just move back and forth
         std::set<Vector2i> visitedPos{};
+        /// Globally unique ID for this ant
+        uint64_t id{};
+        /// If true, this ant is dead
+        bool isDead{};
+
+        bool operator==(const Ant &rhs) const {
+            return id == rhs.id;
+        }
+
+        bool operator!=(const Ant &rhs) const {
+            return !(rhs == *this);
+        }
     };
 }

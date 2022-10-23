@@ -17,5 +17,15 @@ namespace ants {
         std::vector<Ant> ants{};
         /// Unique colony ID
         uint32_t id{};
+        /// If true, this colony is dead
+        bool isDead{};
+
+        bool operator==(const Colony &rhs) const {
+            return id == rhs.id;
+        }
+
+        bool operator!=(const Colony &rhs) const {
+            return !(rhs == *this);
+        }
     };
 };

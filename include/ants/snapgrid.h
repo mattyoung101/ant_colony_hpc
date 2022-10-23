@@ -5,6 +5,7 @@
 #include <cstring>
 
 // Indexing: https://softwareengineering.stackexchange.com/a/212813
+// TODO make this support non-square grids
 
 namespace ants {
     /// 2D snapshot grid, as documented in docs/parallel.md
