@@ -35,8 +35,10 @@ if ("${CMAKE_BUILD_TYPE}" STREQUAL "Release")
 elseif("${CMAKE_BUILD_TYPE}" STREQUAL "Profile")
     message(STATUS "Profile build, enabling gprof")
     # TODO enable gprof here if you want it
-    add_compile_options(-O0)
-    add_link_options()
+    add_compile_options(-O0 -fsanitize=thread -fno-omit-frame-pointer) # FIXME TEMPORARY for thread detection
+    add_link_options(-fsanitize=thread)
+#    add_compile_options(-O0)
+#    add_link_options()
 else()
     message(STATUS "Debug build, enabling sanitizers")
     add_compile_options(-O0 -fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer)

@@ -60,7 +60,7 @@ namespace ants {
         int32_t height{};
     private:
         /// Returns a random movement vector for the specified ant
-        Vector2i randomMovementVector(const Ant &ant);
+        Vector2i randomMovementVector(const Ant &ant, pcg32_fast &localRng) const;
 
         /// Decays pheromones in the grid
         void decayPheromones();
