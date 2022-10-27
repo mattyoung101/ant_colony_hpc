@@ -12,6 +12,7 @@
 #include "log/log.h"
 #include "ants/utils.h"
 #include "stb/stb_image_write.h"
+#include "ants/defines.h"
 
 /// Counts the time in milliseconds between end and begin as a double. The time is counted as nanoseconds
 /// for accuracy, then converted as a double to milliseconds.
@@ -43,11 +44,17 @@ int main(int argc, char *argv[]) {
     log_info("COSC3500 Ant Simulator - Matt Young, 2022");
 
     // initialise OpenMP
+#if USE_OMP
 #pragma omp parallel default(none)
     {
 #pragma omp master
         log_info("OpenMP will use %d thread(s)", omp_get_num_threads());
     }
+#elif USE_CUDA
+    log_info("Using CUDA TODO");
+#else
+    log_info("Using serial ant update");
+#endif
 
     // load config file from disk
     std::string configPath = "antconfig.ini";
@@ -142,7 +149,10 @@ int main(int argc, char *argv[]) {
     world.writeToTar("ants_vs_time.csv", (uint8_t *) antTime.c_str(), antTime.size());
     world.finaliseRecording();
 
+    log_info("=============== Timing Report ===============");
     log_info("Wall time: %.3f ms (%.3f ticks per second)", wallTimeMs, wallFps);
     log_info("Sim time: %.3f ms (%.3f ticks per second)", simTimeMs, simFps);
+    auto nonSim = wallTimeMs - simTimeMs;
+    log_info("Time spent in non-simulator tasks: %.3f ms (%.3f%%)", nonSim, (nonSim / wallTimeMs) * 100.0);
     return 0;
 }

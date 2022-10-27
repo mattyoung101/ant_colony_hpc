@@ -19,6 +19,15 @@
 #include "tinycolor/tinycolormap.hpp"
 #include "clip/clip.h"
 #include "concqueue/concurrentqueue.h"
+#include "ants/defines.h"
+
+#if USE_OMP
+/// OpenMP is enabled, macro will run the given code
+#define MAYBE_OMP(code) code
+#else
+/// OpenMP is disabled, code is a no-op
+#define MAYBE_OMP(code)
+#endif
 
 using namespace ants;
 
@@ -200,19 +209,14 @@ void World::decayPheromones() {
     // - improves behaviour significantly
     double fuzz = pheromoneFuzzFactor * pheromoneDecayFactor;
 
-    // when we thread this, we want each thread to have its own RNG. if we didn't do this, then the
-    // way the threads access the RNG (which is non-deterministic) would in turn cause the sim
-    // results to be non-deterministic. so, what we do is select a unique seed per function call
-    // that each "thread local RNG" will be seeded with
-    uint64_t seed = rng();
-
-//#pragma omp parallel default(none) firstprivate(seed, fuzz)
+#if USE_OMP
+#pragma omp parallel default(none) firstprivate(fuzz)
+#endif
     {
-        pcg32_fast localRng{};
-        localRng.seed(seed);
-        std::uniform_real_distribution<double> fuzzDist(-fuzz, fuzz);
-
-//#pragma omp for
+        int i = 0;
+#if USE_OMP
+#pragma omp for
+#endif
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
                 for (int c = 0; c < static_cast<int>(colonies.size()); c++) {
@@ -226,7 +230,7 @@ void World::decayPheromones() {
                         // fuzz factor is not 0, use RNG
                         // micro-optimisation: compute random value and share it across toColony and
                         // toFood, instead of computing it twice
-                        auto randomness = fuzzDist(localRng);
+                        auto randomness = randomBuffer[i++ % randomBuffer.size()] * fuzz;
                         cur.toColony -= pheromoneDecayFactor + randomness;
                         cur.toFood -= pheromoneDecayFactor + randomness;
                     } else {
@@ -243,8 +247,7 @@ void World::decayPheromones() {
             }
         }
     }
-#pragma omp barrier
-#pragma omp critical
+
     // force a commit, because we do want the world do be updated when this routine returns
     pheromoneGrid.commit();
 }
@@ -254,6 +257,10 @@ bool World::update() {
     bool shouldContinue = true;
     maxAntsLastTick = 0;
     int foodRemaining = 0;
+    // when we thread this, we want each thread to have its own RNG. if we didn't do this, then the
+    // way the threads access the RNG (which is non-deterministic) would in turn cause the sim
+    // results to be non-deterministic. so, what we do is select a unique seed per function call
+    // that each "thread local RNG" will be seeded with
     uint64_t seed = rng();
 
     // decay pheromones not in use
@@ -263,23 +270,26 @@ bool World::update() {
     std::vector<Colony*> colonyAddAnts{};
 
     // update the ants
+#if USE_OMP
 #pragma omp parallel default(none) shared(colonyAddAnts, maxAnts, antsAlive, seed)
+#endif
     {
-        // for info on how we make RNG deterministic (with localRng, etc): see decayPheromones
         pcg32_fast localRng{};
         localRng.seed(seed);
         // so that we don't kill all the ants at once (which looks weird), add some extra noise to the
         // time we might kill them
         std::uniform_int_distribution<int> antKillNoise(0, 75);
 
+#if USE_OMP
 #pragma omp for
+#endif
         for (auto & c : colonies) {
             auto colony = &c;
             // skip dead colonies
             if (colony->isDead) {
                 continue;
             }
-            for (size_t a = 0; a < colony->ants.size(); a++) {
+            for (size_t a = 0; a < colony->ants.size(); a++) { // TODO hardcode colony->ants
                 auto ant = &colony->ants[a];
                 // skip dead ants
                 if (ant->isDead) {
@@ -323,14 +333,18 @@ bool World::update() {
                 if (ant->holdingFood) {
                     // holding food, add to the "to food" strength, so we let other ants know where we
                     // found food
+#if USE_OMP
 #pragma omp critical
+#endif
                     {
                         auto cur = pheromoneGrid.read(ant->pos.x, ant->pos.y, colony->id);
                         cur.toFood += pheromoneGainFactor;
                         pheromoneGrid.write(ant->pos.x, ant->pos.y, colony->id, cur);
                     }
                 } else {
+#if USE_OMP
 #pragma omp critical
+#endif
                     {
                         // looking for food, update the "to colony" strength, so other ants know how to get home
                         auto cur = pheromoneGrid.read(ant->pos.x, ant->pos.y, colony->id);
@@ -353,7 +367,9 @@ bool World::update() {
                     ant->visitedPos.clear();
 
                     // remove food from the world
+#if USE_OMP
 #pragma omp critical
+#endif
                     foodGrid.write(ant->pos.x, ant->pos.y, false);
                 } else if (ant->holdingFood && ant->pos.distance(colony->pos) <= colonyReturnDist) {
                     // got our food and returned home (near enough to the colony)
@@ -396,16 +412,21 @@ bool World::update() {
                 // colony has not died, so add to the ants alive count
                 antsAlive += colony->ants.size();
             }
-            if (antsAlive > maxAnts) {
-                maxAnts = antsAlive;
-            }
-            if (antsAlive > maxAntsLastTick) {
-                maxAntsLastTick = antsAlive;
+
+#if USE_OMP
+#pragma omp critical
+#endif
+            {
+                if (antsAlive > maxAnts) {
+                    maxAnts = antsAlive;
+                }
+                if (antsAlive > maxAntsLastTick) {
+                    maxAntsLastTick = antsAlive;
+                }
             }
         }
         // end each colony loop
     }
-#pragma omp barrier
 
     // serial code that needs to be done after the loop begins here
     for (auto colony : colonyAddAnts) {
@@ -481,8 +502,6 @@ void World::writeRecordingStatistics(uint32_t numTicks, TimeInfo wallTime, TimeI
         "Wall time: " << wallTime << "\n"
                                      "Sim time: " << simTime << "\n";
     // clang-format on
-    oss << "\n========== INI config used ==========\n";
-    // TODO dump INI config to file as well
     auto str = oss.str();
     mtar_write_file_header(&tarfile, "stats.txt", str.length());
     mtar_write_data(&tarfile, str.c_str(), str.length());
@@ -539,7 +558,6 @@ std::vector<uint8_t> World::renderWorldUncompressed() const {
     out.reserve(width * height * 3);
 
     // render world
-    // TODO OpenMP this (may not be easy, we can't use push_back)
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
             if (foodGrid.read(x, y)) {

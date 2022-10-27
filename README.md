@@ -42,11 +42,13 @@ See the report for most of this. In future, I'll document it more here.
 - Introduced random fuzzing to the pheromone decay rate, which improves results quite a lot
   - Random numbers are loaded from a file using `dump_random.cpp`, which is in turned still backed by PCG
   - This is done because profiling showed generating random numbers was one of the slowest parts of the program
+  - FIXME TODO the above is not implemented correctly yet!!!
 - (TODO planned) Used AVX intrinsics for subtraction in `World::decayPheromones`
 - Used locked grid structure during updates, the `SnapGrid`
   - This includes the complex behaviour of killing/spawning more ants, it is all "locked" whil the simulation is running
   - This breaks determinism with the first milestone, but is internally consistent (no race conditions when threading)
-- (TODO planned) Parallelised individual ant updates using (either OpenMP or MPI - very unlikely but possibly CUDA)
+- (TODO planned) Parallelised individual ant updates using OpenMP
+- (TODO planned) Parallelised individual ant updates using CUDA
 - (TODO planned) Parallelised the loop in `World::decayPheromones`
 - Simulation stops early if all ants die, or all food is eaten
 - The delta time of each simulation step, and the number of ants in that step, are measured and logged

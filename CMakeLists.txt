@@ -17,10 +17,12 @@ if (${CMAKE_VERSION} VERSION_LESS "3.16.0")
 endif()
 
 # Optimisation
+# TODO make all of these compatible with getafix (so use CMAKE_SHARED_LINKER_FLAGS)
 if ("${CMAKE_BUILD_TYPE}" STREQUAL "Release")
     message(STATUS "Release build, enabling performance")
     # since we're no longer doing the whole static linking thing, just do march=native and mtune=native
     # should compile the best on both my dev machine and getafix
+    # add -fno-math-errno and -freciprocal-math for some negligible speedups hopefully
     add_compile_options(-O3 -march=native -mtune=native -flto -fno-math-errno -freciprocal-math)
 
     # extremely annoyingly the **latest** version of CMake getafix ships is 3.9.1 which doesn't even support
@@ -51,7 +53,7 @@ include_directories(lib)
 add_executable(ant_colony lib/log/log.c lib/log/log.h src/main.cpp src/world.cpp lib/stb/stb_image.c
     lib/microtar/microtar.c lib/stb/stb_image_write.c src/utils.cpp lib/tinycolor/tinycolormap.hpp
     src/pheromone.cpp lib/clip/clip.cpp lib/clip/clip_x11.cpp lib/clip/image.cpp include/ants/snapgrid.h
-)
+    include/ants/defines.h)
 
 add_executable(dump_random src/dump_random.cpp lib/log/log.c lib/log/log.h src/utils.cpp)
 

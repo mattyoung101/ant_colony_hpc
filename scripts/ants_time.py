@@ -4,8 +4,7 @@ import matplotlib.pyplot as plt
 import tarfile
 
 FILES = {
-    "Release": "../results/ants_23-10-2022_21-18-33.tar",
-    "Debug": "../results/ants_23-10-2022_21-19-59.tar",
+    "Release": "../results/ants_26-10-2022_14-55-51.tar",
 }
 
 if __name__ == "__main__":
