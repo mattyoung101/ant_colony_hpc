@@ -2,6 +2,7 @@
 # Attempts to build the project on getafix. Should work.
 module load gnu/10.2.1
 module load cmake/3.9.1
+module load cuda
 rm -rf build
 mkdir build
 cd build
