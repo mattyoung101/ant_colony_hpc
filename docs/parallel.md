@@ -1,5 +1,5 @@
 # Parallelising ant updates
-
+## OpenMP
 Observation: Each ant update is independent of every other ant. That means we should be able to
 update each ant in the world independently, i.e. in a separate thread block. Here's how it will work:
 
@@ -30,3 +30,41 @@ how.
 
 Implementation details:
 - Probably should template this class
+
+TODO: compare parallelising ant update loop vs colony update loop
+
+## CUDA
+For CUDA we will parallelise the ant update loop, not the colony update loop. This is because 
+that way we can use the 3D CUDA grid for (x, y, ant). Also, because vectors are not well supported
+on the GPU.
+
+```
+Upload the SnapGrids (dirty and clean buffer) to the GPU
+
+For each colony:
+    Run CUDA kernel which will simulate each ant in the whole colony
+    Run colony tasks (if we should kill the colony, etc)
+    
+Copy the SnapGrids back from the GPU
+Run serial tasks
+```
+
+**Vector problem:** Basically the main problem is that in the ant update loop we normally insert
+the colony pointer into the `colonyAddAnts` vector. CUDA does not support the STL, so means we 
+cannot insert to this vector from the kernel. CUDA also does not support critical sections either.
+
+This is resolved by making an array the size of the number of ants in the colony. Each ant will write
+to the index in the array true/false depending on whether it thinks the colony should add more ants.
+We then iterate over the array and see if there is at least on true and if so add more ants.
+
+The bigger problem is we need to update the ant's visited positions set. We can't use a set in CUDA.
+We would have to replace this with a bool SnapGrid, which would be a lot slower to look through. It's
+the only option really though.
+
+## MPI
+If CUDA is too hard, we can always do MPI (if that's even any easier lmao fml).
+
+We could either:
+
+- Scatter each colony to the workers, and run the ant update loop using OpenMP
+- Scatter each ant to the workers, then gather them.

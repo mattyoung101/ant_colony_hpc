@@ -26,6 +26,10 @@ namespace ants {
         /// @return true if we should keep iterating the simulation, false if we should quit now
         [[nodiscard]] bool update();
 
+        /// Updates the world for one time step using CUDA. Replaces World::update() when CUDA is enabled.
+        /// @return true if we should keep iterating the simulation, false if we should quit now
+        [[nodiscard]] bool updateCuda();
+
         /**
          * Sets up PNG TAR disk output. PNG files are written to a TAR file that can then be downloaded
          * later.

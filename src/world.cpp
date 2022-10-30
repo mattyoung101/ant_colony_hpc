@@ -330,22 +330,17 @@ bool World::update() {
                 }
 
                 // update world
-                if (ant->holdingFood) {
-                    // holding food, add to the "to food" strength, so we let other ants know where we
-                    // found food
 #if USE_OMP
 #pragma omp critical
 #endif
-                    {
+                {
+                    if (ant->holdingFood) {
+                        // holding food, add to the "to food" strength, so we let other ants know where we
+                        // found food
                         auto cur = pheromoneGrid.read(ant->pos.x, ant->pos.y, colony->id);
                         cur.toFood += pheromoneGainFactor;
                         pheromoneGrid.write(ant->pos.x, ant->pos.y, colony->id, cur);
-                    }
-                } else {
-#if USE_OMP
-#pragma omp critical
-#endif
-                    {
+                    } else {
                         // looking for food, update the "to colony" strength, so other ants know how to get home
                         auto cur = pheromoneGrid.read(ant->pos.x, ant->pos.y, colony->id);
                         cur.toColony += pheromoneGainFactor;
@@ -383,12 +378,10 @@ bool World::update() {
 #if USE_OMP
 #pragma omp critical
 #endif
-                    {
-                        colony->hunger += colonyHungerReplenish;
-                        colonyAddAnts.emplace_back(colony);
-                    }
-                }
-                // update ticks since last useful
+                    colonyAddAnts.emplace_back(colony);
+                } // end update ant state
+
+                // update ticks since last useful for the ant
                 if (!ant->holdingFood) {
                     ant->ticksSinceLastUseful++;
                 }
@@ -401,42 +394,16 @@ bool World::update() {
                     ant->isDead = true;
                 }
             } // end each ant in colony loop
-
-            // update colony hunger
-            colony->hunger -= colonyHungerDrain;
-            colony->hunger = std::clamp(colony->hunger, 0.0, 1.0);
-
-            // kill the colony if the hunger meter has expired, or all its ants have died
-            if (colony->hunger <= 0 || colony->ants.empty()) {
-                log_trace("Colony id %d has died! (hunger=%.2f, ants=%zu)", colony->id,
-                          colony->hunger,
-                          colony->ants.size());
-                colony->isDead = true;
-            } else {
-                // colony has not died, so add to the ants alive count
-#if USE_OMP
-#pragma omp critical
-#endif
-                antsAlive += colony->ants.size();
-            }
-
-#if USE_OMP
-#pragma omp critical
-#endif
-            {
-                if (antsAlive > maxAnts) {
-                    maxAnts = antsAlive;
-                }
-                if (antsAlive > maxAntsLastTick) {
-                    maxAntsLastTick = antsAlive;
-                }
-            }
         } // end each colony loop
     } // end OMP block
 
     // serial code that needs to be done after the loop begins here
+    // spawn in new ants for colonies that need it
     for (auto colony : colonyAddAnts) {
         log_trace("Adding more ants to colony id %d", colony->id);
+        // boost the colony
+        colony->hunger += colonyHungerReplenish;
+        // spawn in new ants
         for (int i = 0; i < colonyAntsPerTick; i++) {
             Ant newAnt{};
             newAnt.holdingFood = false;
@@ -449,12 +416,38 @@ bool World::update() {
         }
     }
 
+    // process colony stats
+    for (auto colony = colonies.begin(); colony != colonies.end(); colony++) {
+        // update colony hunger
+        colony->hunger -= colonyHungerDrain;
+        colony->hunger = std::clamp(colony->hunger, 0.0, 1.0);
+
+        // kill the colony if the hunger meter has expired, or all its ants have died
+        if (colony->hunger <= 0 || colony->ants.empty()) {
+            log_trace("Colony id %d has died! (hunger=%.2f, ants=%zu)", colony->id,
+                      colony->hunger,
+                      colony->ants.size());
+            colony->isDead = true;
+        } else {
+            // colony has not died, so add to the ants alive count
+            antsAlive += colony->ants.size();
+        }
+
+        // update max ants statistics
+        if (antsAlive > maxAnts) {
+            maxAnts = antsAlive;
+        }
+        if (antsAlive > maxAntsLastTick) {
+            maxAntsLastTick = antsAlive;
+        }
+    }
+
     // commit values to snapshot grid
     foodGrid.commit();
     pheromoneGrid.commit();
     obstacleGrid.commit();
 
-    // count food remaining TODO optimise this with AVX
+    // count food remaining TODO optimise this with something
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
             if (foodGrid.read(x, y)) {

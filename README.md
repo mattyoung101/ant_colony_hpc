@@ -2,38 +2,32 @@
 This is the ant simulation project I'm writing for COSC3500, written in C++17. Please see the report
 for more information.
 
-**Important: In order to compile on the getafix HPC cluster, please follow "Compiling on getafix" 
-instructions below.**
+### Important! In order to compile on the getafix HPC cluster, please follow "Compiling on getafix" instructions below.
 
-Author: Matt Young (m.young2@uqconnect.edu.au)
+**Author:** Matt Young (m.young2@uqconnect.edu.au)
 
 ## Features
 TODO
 
 ## Building and running
 ### Compiling on getafix
-Run `./build_getafix.sh` in the root directory of the project. It should do everything automatically,
-and leave you with the release build of `ant_colony` in the root directory. Then, just run `./ant_colony`.
+Run `./build_getafix.sh` in the root directory of the project. It should do everything automatically.
+Then, just run `./cmake-build-release-getafix/ant_colony` or `sbatch slurm.sh` or `sbatch gpuslurm.sh`.
 
-If that doesn't work, or you don't want to run shell scripts, you can execute the following commands:
-
-1. Add a more recent gcc: `module load gnu/10.2.1`
-2. Add a more recent version of CMake: `module load cmake/3.9.1`
-3. Make a build directory: `mkdir build && cd build`
-4. Run CMake: `cmake -DCMAKE_BUILD_TYPE="Release" ..`
-5. Compile: `make -j16`
-6. Fix paths: `cp ant_colony .. && cd ..`
-7. Run: `./ant_colony`
+Building manually (without the script) is more complicated, but can be done. The main challenge is
+that the version of CMake which getafix ships is way too old to be useful. Instead, you will need
+to use the version of CMake I included in this release archive.
 
 ### General instructions
-Compile with at least Clang 12 (preferred), GCC 10, or later. The latest available version of CMake
-is recommended (at least 3.16.0 required for full features and no hacks).
+Compile with at least Clang 10, GCC 10, or later. The latest available version of CMake
+is recommended (at least 3.16.0 required for full features and no hacks). CUDA is also (unfortunately) 
+recommended, but not required.
 
-Make sure that antconfig.ini, maps/, and results/ and the ant_colony executable are in your working
-directory. Then run ant_colony and it will do the rest. Feel free to take a look at antconfig.ini
-to see what you can change.
+You can build the project by doing `mkdir cmake-build-release`, `cd cmake-build-release`,
+`cmake -DCMAKE_BUILD_TYPE=Release ..`, `make -j16`. You will then have a binary called `ant_colony`, 
+which you can call from the root directory of the project by doing `./cmake-build-release/ant_colony`.
 
-Highly recommended to run the project in CLion, as that's what I used to develop.
+It's highly recommended to run the project in CLion, as that's what I used to develop.
 
 ## Implementation details
 See the report for most of this. In future, I'll document it more here.

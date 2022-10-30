@@ -6,8 +6,6 @@
 #include "log/log.h"
 
 // Indexing: https://softwareengineering.stackexchange.com/a/212813
-// TODO make this support non-square grids (VERY IMPORTANT)
-// TODO and for 3D one make it support _n_ colonies (not just world size)
 
 namespace ants {
     /// 2D snapshot grid, as documented in docs/parallel.md
@@ -25,8 +23,6 @@ namespace ants {
         }
 
         SnapGrid2D() = default;
-
-        // TODO also consider making read and write (or at least write) atomic(?)
 
         /// Writes a value into the dirty buffer
         inline constexpr void write(int32_t x, int32_t y, T value) {
@@ -72,25 +68,15 @@ namespace ants {
 
         SnapGrid3D() = default;
 
-        // TODO also consider making read and write (or at least write) atomic(?)
-
         /// Writes a value into the dirty buffer
-        inline constexpr void write(int32_t x, int32_t y, int32_t z, T value) {
+        template<class I>
+        inline constexpr void write(int32_t x, int32_t y, I z, T value) {
             dirty[x + width * y + width * height * z] = value;
         }
 
-        inline constexpr void write(int32_t x, int32_t y, uint32_t z, T value) {
-            dirty[x + width * y + width * height * z] = value;
-        }
-
-        /**
-         * Reads a value from the snapshot grid, from the clean buffer
-         */
-        inline constexpr T read(int32_t x, int32_t y, int32_t z) const {
-            return clean[x + width * y + width * height * z];
-        }
-
-        inline constexpr T read(int32_t x, int32_t y, uint32_t z) const {
+        /// Reads a value from the snapshot grid, from the clean buffer
+        template<class I>
+        inline constexpr T read(int32_t x, int32_t y, I z) const {
             return clean[x + width * y + width * height * z];
         }
 

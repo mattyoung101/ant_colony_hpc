@@ -1,21 +1,16 @@
 # COSC3500 Ant Simulator build config
 # Matt Young, 2022
-cmake_minimum_required(VERSION 3.9.1)
+cmake_minimum_required(VERSION 3.16.0)
 project(ant_colony LANGUAGES C CXX)
+
+# see if CUDA is available
+include(CheckLanguage)
+check_language(CUDA)
 
 ## Compile as C++17
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_C_STANDARD 11)
 add_compile_options(-Wall -Wextra -Wno-unused-parameter -Wno-unused-variable -g3)
-
-if (${CMAKE_VERSION} VERSION_LESS "3.16.0")
-    message(STATUS "Ancient CMake version detected (this is probably getafix)")
-    # if they forget to pass CMAKE_BUILD_TYPE=Release, compilation won't work, so remind them
-    if (NOT ${CMAKE_BUILD_TYPE} STREQUAL "Release")
-        message(WARNING "Non-Release builds will not work with default getafix CMake. You probably want
-        to add -DCMAKE_BUILD_TYPE=Release. See README.md for more details.")
-    endif()
-endif()
 
 # Optimisation
 if ("${CMAKE_BUILD_TYPE}" STREQUAL "Release")
@@ -24,16 +19,7 @@ if ("${CMAKE_BUILD_TYPE}" STREQUAL "Release")
     # should compile the best on both my dev machine and getafix
     # add -fno-math-errno and -freciprocal-math for some negligible speedups hopefully
     add_compile_options(-O3 -march=native -mtune=native -flto -fno-math-errno -freciprocal-math)
-
-    # getafix ships an ancient version of CMake. we have to at least support the Release target on its
-    # ancient old version, so detect if we need to use the old method or the new one.
-    if(${CMAKE_VERSION} VERSION_LESS "3.16.0")
-        message(STATUS "Using old link options method")
-        set (CMAKE_SHARED_LINKER_FLAGS "-flto -fno-math-errno")
-    else()
-        message(STATUS "Using new link options method")
-        add_link_options(-flto -fno-math-errno)
-    endif()
+    add_link_options(-flto -fno-math-errno)
 elseif("${CMAKE_BUILD_TYPE}" STREQUAL "Profile")
     message(STATUS "Profile build, enabling gprof")
     # this one is for thread sanitizer
@@ -56,6 +42,21 @@ add_executable(ant_colony lib/log/log.c lib/log/log.h src/main.cpp src/world.cpp
     lib/microtar/microtar.c lib/stb/stb_image_write.c src/utils.cpp lib/tinycolor/tinycolormap.hpp
     src/pheromone.cpp lib/clip/clip.cpp lib/clip/clip_x11.cpp lib/clip/image.cpp include/ants/snapgrid.h
     include/ants/defines.h)
+
+# CUDA for ant_colony target
+if (CMAKE_CUDA_COMPILER)
+    message(STATUS "Detected CUDA")
+    enable_language(CUDA)
+    set(CMAKE_CUDA_STANDARD 11)
+    set_target_properties(ant_colony PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+    add_compile_definitions(HAVE_CUDA)
+    # https://forums.developer.nvidia.com/t/passing-flags-to-nvcc-via-cmake/75768/4
+    target_compile_options(ant_colony PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
+        -O2 --gpu-architecture=sm_35 -Wno-deprecated-gpu-targets -std=c++11 -g
+        >)
+else()
+    message(STATUS "No CUDA detected")
+endif()
 
 add_executable(dump_random src/dump_random.cpp lib/log/log.c lib/log/log.h src/utils.cpp)
 

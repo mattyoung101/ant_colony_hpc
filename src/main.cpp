@@ -31,12 +31,9 @@ struct ImageContext {
 // for stbi_write
 // the context pointer is the world instance
 static void writeFunc(void *context, void *data, int size) {
-#pragma omp critical
-    {
-        auto imageContext = static_cast<ImageContext *>(context);
-        //log_trace("Writing %d bytes to file in TAR %s", size, imageContext->filename.c_str());
-        imageContext->world.writeToTar(imageContext->filename, static_cast<uint8_t *>(data), size);
-    }
+    auto imageContext = static_cast<ImageContext *>(context);
+    //log_trace("Writing %d bytes to file in TAR %s", size, imageContext->filename.c_str());
+    imageContext->world.writeToTar(imageContext->filename, static_cast<uint8_t *>(data), size);
 }
 
 int main(int argc, char *argv[]) {
