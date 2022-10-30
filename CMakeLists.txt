@@ -9,15 +9,15 @@ set(CMAKE_C_STANDARD 11)
 add_compile_options(-Wall -Wextra -Wno-unused-parameter -Wno-unused-variable -g3)
 
 if (${CMAKE_VERSION} VERSION_LESS "3.16.0")
-    message(STATUS "Ancient CMake version detected, doing our best")
+    message(STATUS "Ancient CMake version detected (this is probably getafix)")
     # if they forget to pass CMAKE_BUILD_TYPE=Release, compilation won't work, so remind them
     if (NOT ${CMAKE_BUILD_TYPE} STREQUAL "Release")
-        message(FATAL_ERROR "Only CMAKE_BUILD_TYPE=Release is supported on getafix. Please see README.md.")
+        message(WARNING "Non-Release builds will not work with default getafix CMake. You probably want
+        to add -DCMAKE_BUILD_TYPE=Release. See README.md for more details.")
     endif()
 endif()
 
 # Optimisation
-# TODO make all of these compatible with getafix (so use CMAKE_SHARED_LINKER_FLAGS)
 if ("${CMAKE_BUILD_TYPE}" STREQUAL "Release")
     message(STATUS "Release build, enabling performance")
     # since we're no longer doing the whole static linking thing, just do march=native and mtune=native
@@ -25,8 +25,8 @@ if ("${CMAKE_BUILD_TYPE}" STREQUAL "Release")
     # add -fno-math-errno and -freciprocal-math for some negligible speedups hopefully
     add_compile_options(-O3 -march=native -mtune=native -flto -fno-math-errno -freciprocal-math)
 
-    # extremely annoyingly the **latest** version of CMake getafix ships is 3.9.1 which doesn't even support
-    # the add_link_options command
+    # getafix ships an ancient version of CMake. we have to at least support the Release target on its
+    # ancient old version, so detect if we need to use the old method or the new one.
     if(${CMAKE_VERSION} VERSION_LESS "3.16.0")
         message(STATUS "Using old link options method")
         set (CMAKE_SHARED_LINKER_FLAGS "-flto -fno-math-errno")
@@ -36,13 +36,15 @@ if ("${CMAKE_BUILD_TYPE}" STREQUAL "Release")
     endif()
 elseif("${CMAKE_BUILD_TYPE}" STREQUAL "Profile")
     message(STATUS "Profile build, enabling gprof")
-    # TODO enable gprof here if you want it
-    add_compile_options(-O0 -fsanitize=thread -fno-omit-frame-pointer) # FIXME TEMPORARY for thread detection
-    add_link_options(-fsanitize=thread)
-#    add_compile_options(-O0)
-#    add_link_options()
+    # this one is for thread sanitizer
+#    add_compile_options(-O0 -fsanitize=thread -fno-omit-frame-pointer)
+#    add_link_options(-fsanitize=thread)
+
+    # this one is for normal profiling
+    add_compile_options(-O0)
 else()
     message(STATUS "Debug build, enabling sanitizers")
+    # enable ASan and UBSan, no optimisation
     add_compile_options(-O0 -fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer)
     add_link_options(-fsanitize=address -fsanitize=undefined)
 endif()

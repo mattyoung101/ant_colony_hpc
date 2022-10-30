@@ -3,19 +3,25 @@
 #pragma once
 #include <cstdint>
 #include <cstring>
+#include "log/log.h"
 
 // Indexing: https://softwareengineering.stackexchange.com/a/212813
-// TODO make this support non-square grids
+// TODO make this support non-square grids (VERY IMPORTANT)
+// TODO and for 3D one make it support _n_ colonies (not just world size)
 
 namespace ants {
     /// 2D snapshot grid, as documented in docs/parallel.md
     template<typename T>
     struct SnapGrid2D {
         /// Constructs a new empty SnapGrid
-        explicit SnapGrid2D(int32_t size)  {
-            this->size = size;
-            clean = new T[size * size]{};
-            dirty = new T[size * size]{};
+        explicit SnapGrid2D(int32_t width, int32_t height)  {
+            this->width = width;
+            this->height = height;
+            log_debug("new SnapGrid2D, width: %d, height: %d, array size: %d, bytes: %lu", width,
+                      height, width * height, width * height * sizeof(T));
+            log_debug("SnapGrid2D sizeof(T): %lu", sizeof(T));
+            clean = new T[width * height]{};
+            dirty = new T[width * height]{};
         }
 
         SnapGrid2D() = default;
@@ -24,13 +30,13 @@ namespace ants {
 
         /// Writes a value into the dirty buffer
         inline constexpr void write(int32_t x, int32_t y, T value) {
-            dirty[x + size * y] = value;
+            dirty[x + width * y] = value;
         }
 
 
         /// Reads a value from the snapshot grid, from the clean buffer
         inline constexpr T read(int32_t x, int32_t y) const {
-            return clean[x + size * y];
+            return clean[x + width * y];
         }
 
         /**
@@ -38,14 +44,14 @@ namespace ants {
          * buffer.
          */
         inline constexpr void commit() {
-            memcpy(clean, dirty, size * size * sizeof(T));
+            memcpy(clean, dirty, width * height * sizeof(T));
         }
 
         /// Clean buffer
         T *clean{};
         /// Dirty buffer
         T *dirty{};
-        int32_t size{};
+        int32_t width{}, height{};
     };
 
 
@@ -53,10 +59,15 @@ namespace ants {
     template<typename T>
     struct SnapGrid3D {
         /// Constructs a new empty SnapGrid
-        explicit SnapGrid3D(int32_t size)  {
-            this->size = size;
-            clean = new T[size * size * size];
-            dirty = new T[size * size * size];
+        explicit SnapGrid3D(int32_t width, int32_t height, int32_t depth)  {
+            this->width = width;
+            this->height = height;
+            this->depth = depth;
+            log_debug("new SnapGrid3D, width: %d, height: %d, depth: %d, array size: %d, bytes: %lu", width,
+                      height, depth, width * height * depth, width * height * depth * sizeof(T));
+            log_debug("SnapGrid3D sizeof(T): %lu", sizeof(T));
+            clean = new T[width * height * depth];
+            dirty = new T[width * height * depth];
         }
 
         SnapGrid3D() = default;
@@ -65,22 +76,22 @@ namespace ants {
 
         /// Writes a value into the dirty buffer
         inline constexpr void write(int32_t x, int32_t y, int32_t z, T value) {
-            dirty[x + size * y + size * size * z] = value;
+            dirty[x + width * y + width * height * z] = value;
         }
 
         inline constexpr void write(int32_t x, int32_t y, uint32_t z, T value) {
-            dirty[x + size * y + size * size * z] = value;
+            dirty[x + width * y + width * height * z] = value;
         }
 
         /**
          * Reads a value from the snapshot grid, from the clean buffer
          */
         inline constexpr T read(int32_t x, int32_t y, int32_t z) const {
-            return clean[x + size * y + size * size * z];
+            return clean[x + width * y + width * height * z];
         }
 
         inline constexpr T read(int32_t x, int32_t y, uint32_t z) const {
-            return clean[x + size * y + size * size * z];
+            return clean[x + width * y + width * height * z];
         }
 
         /**
@@ -88,13 +99,13 @@ namespace ants {
          * buffer.
          */
         inline constexpr void commit() {
-            memcpy(clean, dirty, size * size * size * sizeof(T));
+            memcpy(clean, dirty, width * height * depth * sizeof(T));
         }
 
         /// Clean buffer
         T *clean{};
         /// Dirty buffer
         T *dirty{};
-        int32_t size{};
+        int32_t width{}, height{}, depth{};
     };
 }

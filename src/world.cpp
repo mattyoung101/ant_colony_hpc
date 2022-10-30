@@ -52,9 +52,8 @@ World::World(const std::string& filename, mINI::INIStructure config) {
     height = imgHeight;
 
     // construct grids, initialised with nullptr: https://stackoverflow.com/a/2204380/5007892
-    foodGrid = SnapGrid2D<bool>(height);
-    pheromoneGrid = SnapGrid3D<PheromoneStrength>(height);
-    obstacleGrid = SnapGrid2D<bool>(height);
+    foodGrid = SnapGrid2D<bool>(width, height);
+    obstacleGrid = SnapGrid2D<bool>(width, height);
 
     // mapping between each unique colour and its position
     std::unordered_map<RGBColour, Vector2i> uniqueColours{};
@@ -136,6 +135,7 @@ World::World(const std::string& filename, mINI::INIStructure config) {
         }
         colonies.emplace_back(colony);
     }
+    pheromoneGrid = SnapGrid3D<PheromoneStrength>(width, height, static_cast<int>(colonies.size()));
 
     // load INI values
     pheromoneDecayFactor = std::stod(config["Pheromones"]["decay_factor"]);
@@ -380,8 +380,13 @@ bool World::update() {
                     ant->visitedPos.clear();
 
                     // boost the colony
-                    colony->hunger += colonyHungerReplenish;
-                    colonyAddAnts.emplace_back(colony);
+#if USE_OMP
+#pragma omp critical
+#endif
+                    {
+                        colony->hunger += colonyHungerReplenish;
+                        colonyAddAnts.emplace_back(colony);
+                    }
                 }
                 // update ticks since last useful
                 if (!ant->holdingFood) {
@@ -395,8 +400,7 @@ bool World::update() {
                               ant->pos.x, ant->pos.y);
                     ant->isDead = true;
                 }
-            }
-            // end each ant in colony loop
+            } // end each ant in colony loop
 
             // update colony hunger
             colony->hunger -= colonyHungerDrain;
@@ -410,6 +414,9 @@ bool World::update() {
                 colony->isDead = true;
             } else {
                 // colony has not died, so add to the ants alive count
+#if USE_OMP
+#pragma omp critical
+#endif
                 antsAlive += colony->ants.size();
             }
 
@@ -424,9 +431,8 @@ bool World::update() {
                     maxAntsLastTick = antsAlive;
                 }
             }
-        }
-        // end each colony loop
-    }
+        } // end each colony loop
+    } // end OMP block
 
     // serial code that needs to be done after the loop begins here
     for (auto colony : colonyAddAnts) {
