@@ -67,4 +67,30 @@ If CUDA is too hard, we can always do MPI (if that's even any easier lmao fml).
 We could either:
 
 - Scatter each colony to the workers, and run the ant update loop using OpenMP
-- Scatter each ant to the workers, then gather them.
+- Scatter each ant to the workers, then gather them (no OpenMP)
+
+## Evaluation: CUDA vs MPI
+**Reasons to use CUDA:**
+
+- It might be faster than MPI
+- It might be easier to use than MPI
+
+**Reasons not to use CUDA:**
+
+- It would require rewriting a large amount of the code (move away from STL)
+- Limited GPU VRAM greatly restricts how big our maps can be, therefore not easy to compare against
+OpenMP
+- It might be harder to debug
+
+**Reasons to use MPI:**
+
+- Doesn't require rewriting as much code
+- More commonly used in HPC(?)
+- Might be easier to debug (we can still use ASan, etc)
+- Can test locally (since it doesn't require a GPU)
+- CLion will support it better
+
+**Reasons not to use MPI:**
+
+- It also could be harder to debug
+- It might be slower than CUDA

@@ -3,9 +3,9 @@
 cmake_minimum_required(VERSION 3.16.0)
 project(ant_colony LANGUAGES C CXX)
 
-# see if CUDA is available
-include(CheckLanguage)
-check_language(CUDA)
+# add MPI package
+find_package(MPI REQUIRED)
+message(STATUS "Found MPI: ${MPI_VERSION}")
 
 ## Compile as C++17
 set(CMAKE_CXX_STANDARD 17)
@@ -42,21 +42,6 @@ add_executable(ant_colony lib/log/log.c lib/log/log.h src/main.cpp src/world.cpp
     lib/microtar/microtar.c lib/stb/stb_image_write.c src/utils.cpp lib/tinycolor/tinycolormap.hpp
     src/pheromone.cpp lib/clip/clip.cpp lib/clip/clip_x11.cpp lib/clip/image.cpp include/ants/snapgrid.h
     include/ants/defines.h)
-
-# CUDA for ant_colony target
-if (CMAKE_CUDA_COMPILER)
-    message(STATUS "Detected CUDA")
-    enable_language(CUDA)
-    set(CMAKE_CUDA_STANDARD 11)
-    set_target_properties(ant_colony PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
-    add_compile_definitions(HAVE_CUDA)
-    # https://forums.developer.nvidia.com/t/passing-flags-to-nvcc-via-cmake/75768/4
-    target_compile_options(ant_colony PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
-        -O2 --gpu-architecture=sm_35 -Wno-deprecated-gpu-targets -std=c++11 -g
-        >)
-else()
-    message(STATUS "No CUDA detected")
-endif()
 
 add_executable(dump_random src/dump_random.cpp lib/log/log.c lib/log/log.h src/utils.cpp)
 

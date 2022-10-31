@@ -4,7 +4,9 @@ import matplotlib.pyplot as plt
 import tarfile
 
 FILES = {
-    "Release": "../results/ants_30-10-2022_05-12-38.tar",
+    "Release Serial": "../results/SERIAL_ants_31-10-2022_05-02-21.tar",
+    "Release OpenMP (16 threads)": "../results/OMP_ants_31-10-2022_05-01-22.tar",
+    # TODO release OpenMP 32 threads (currently running)
 }
 
 if __name__ == "__main__":
@@ -19,7 +21,7 @@ if __name__ == "__main__":
 
     ax.set_ylabel("Average iteration time (milliseconds)")
     ax.set_xlabel("Number of ants")
-    ax.set_title("Impact of ant count on performance")
+    ax.set_title("Impact of ant count on performance (Getafix, megamap)")
     ax.legend()
     ax.grid()
     plt.show()

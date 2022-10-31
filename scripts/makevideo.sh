@@ -3,7 +3,7 @@
 TMPDIR=$(mktemp -d /tmp/ants_XXXXXXXX)
 
 echo "Extracting tar $1 to $TMPDIR"
-tar -xf "$1" -C "$TMPDIR"
+tar -xf "$1" --warning=no-timestamp -C "$TMPDIR"
 
 echo "Processing"
 # NOTES:
@@ -15,12 +15,14 @@ echo "Processing"
 # - https://trac.ffmpeg.org/wiki/Encode/VP9
 # - https://stackoverflow.com/questions/24961127/how-to-create-a-video-from-images-with-ffmpeg
 # - https://ottverse.com/how-to-create-gif-from-images-using-ffmpeg/
-ffmpeg -y -framerate 40 -i "$TMPDIR/%d.png" -vf scale=457:324:flags=neighbor \
-  -c:v libx265 -crf 20 -b:v 0 ants.mp4
+
+# use x265
+#ffmpeg -y -framerate 40 -i "$TMPDIR/%d.png" -vf scale=960:540:flags=neighbor \
+#  -c:v libx265 -crf 20 -b:v 0 ants.mp4
+
+# use vp9
+ffmpeg -y -framerate 40 -i "$TMPDIR/%d.png" -vf scale=960:540:flags=neighbor \
+  -c:v libvpx-vp9 -crf 20 -b:v 0 -deadline good -cpu-used 1 -row-mt 1 -threads 0 ants.webm
 
 echo "Cleaning up"
 rm -r $TMPDIR
-
-# vp9 is cool but slow:
-#ffmpeg -y -framerate 10 -i "/tmp/ants_pqV8ISde/%d.png" -vf scale=800:800:flags=neighbor \
-#  -c:v libvpx-vp9 -threads 16 -crf 10 -b:v 0 ants.webm
