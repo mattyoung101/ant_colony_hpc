@@ -37,13 +37,12 @@ See the report for most of this. In future, I'll document it more here.
   - Random numbers are loaded from a file using `dump_random.cpp`, which is in turned still backed by PCG
   - This is done because profiling showed generating random numbers was one of the slowest parts of the program
   - FIXME TODO the above is not implemented correctly yet!!!
-- (TODO planned) Used AVX intrinsics for subtraction in `World::decayPheromones`
 - Used locked grid structure during updates, the `SnapGrid`
   - This includes the complex behaviour of killing/spawning more ants, it is all "locked" whil the simulation is running
   - This breaks determinism with the first milestone, but is internally consistent (no race conditions when threading)
-- (TODO planned) Parallelised individual ant updates using OpenMP
-- (TODO planned) Parallelised individual ant updates using CUDA
-- (TODO planned) Parallelised the loop in `World::decayPheromones`
+- Parallelised individual ant updates using OpenMP
+- (TODO planned) Parallelised individual ant updates using MPI
+- Parallelised the loop in `World::decayPheromones`
 - Simulation stops early if all ants die, or all food is eaten
 - The delta time of each simulation step, and the number of ants in that step, are measured and logged
 
@@ -57,6 +56,7 @@ The following open source libraries are used:
 - [pcg-cpp](https://github.com/imneme/pcg-cpp): C++ implementation of the high-quality PCG RNG algorithm: Apache 2.0 licence
 - [tinycolormap](https://github.com/yuki-koyama/tinycolormap): Matplotlib colour maps in C++: MIT licence
 - [clip](https://github.com/dacap/clip): Clipboard library, used for development purposes only: MIT licence
+- [cereal](https://github.com/USCiLab/cereal): C++ serialisation framework: BSD 3-clause licence
 
 ## Licence
 Hopefully eventually MPL 2.0 once the course is done. For now, academic use at UQ only.

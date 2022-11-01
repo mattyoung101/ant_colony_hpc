@@ -13,5 +13,12 @@ namespace ants {
         PheromoneStrength() = default;
 
         PheromoneStrength(double toColony, double toFood) : toColony(toColony), toFood(toFood) {}
+
+        // This method lets cereal know which data members to serialize
+        template<class Archive>
+        void serialize(Archive & archive)
+        {
+            archive(toColony, toFood); // serialize things by passing them to the archive
+        }
     };
 };

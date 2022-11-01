@@ -148,7 +148,21 @@ namespace ants {
             return os;
         }
     };
-};
+
+    /**
+     * Computes the CRC32 hash of the buffer.
+     * @param buf contiguous buffer
+     * @param size size of buf in bytes
+     * @return CRC32 sum of the buffer
+     */
+    uint32_t crc32(const void *buf, size_t size);
+
+    /**
+     * Prints the hex dump of the given buffer
+     * Source: https://stackoverflow.com/a/29865/5007892
+     */
+    void hexdump(const void *ptr, size_t size);
+}
 
 namespace std {
     /// Hash for RGBColour

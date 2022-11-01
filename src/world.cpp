@@ -18,16 +18,9 @@
 #include "log/log.h"
 #include "tinycolor/tinycolormap.hpp"
 #include "clip/clip.h"
-#include "concqueue/concurrentqueue.h"
 #include "ants/defines.h"
-
-#if USE_OMP
-/// OpenMP is enabled, macro will run the given code
-#define MAYBE_OMP(code) code
-#else
-/// OpenMP is disabled, code is a no-op
-#define MAYBE_OMP(code)
-#endif
+#include <mpi.h>
+#include <cereal/archives/binary.hpp>
 
 using namespace ants;
 
@@ -466,6 +459,97 @@ bool World::update() {
     }
     return shouldContinue;
 }
+
+#if USE_MPI
+bool World::updateMpi() {
+    if (mpiRank == 0) {
+        return updateMpiMaster();
+    } else {
+        return updateMpiWorker();
+    }
+}
+
+bool World::updateMpiMaster() {
+    // first, generate and broadcast the RNG seed to all our workers
+    uint64_t seed = rng();
+    MPI_Bcast(&seed, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
+    MPI_Barrier(MPI_COMM_WORLD);
+    log_trace("Sent seed to workers: 0x%lX", seed);
+
+    // broadcast SnapGrids to all workers: foodGrid, obstacleGrid, pheromoneGrid
+    // only broadcast the dirty grid to save time (remember, dirty == clean at the start of the loop)
+    MPI_Bcast(foodGrid.dirty, foodGrid.width * foodGrid.height, MPI_CXX_BOOL,
+              0, MPI_COMM_WORLD);
+    MPI_Bcast(obstacleGrid.dirty, obstacleGrid.width * obstacleGrid.height,
+              MPI_CXX_BOOL, 0, MPI_COMM_WORLD);
+
+    // the pheromone grid is harder since MPI can't send classes, we will need to list the help of cereal,
+    // a C++ serialisation library
+    std::stringstream stream{};
+    {
+        cereal::BinaryOutputArchive archive(stream);
+        // https://stackoverflow.com/a/27749324/5007892
+        archive(cereal::binary_data(pheromoneGrid.dirty,
+                                    sizeof(PheromoneStrength) * pheromoneGrid.width
+                                    * pheromoneGrid.height * pheromoneGrid.depth));
+        // cereal uses RAII, so we need to put a scope here to make sure the archive is flushed
+    }
+    log_trace("Serialised pheromoneGrid to %d bytes", static_cast<int>(stream.str().size()));
+    hexdump(stream.str().data(), stream.str().size());
+
+    // transmit the serialised array (excuse the awful looking casts)
+    MPI_Bcast(stream.str().data(), static_cast<int>(stream.str().size()),
+              MPI_CHAR, 0, MPI_COMM_WORLD);
+    MPI_Barrier(MPI_COMM_WORLD);
+    log_trace("Sent SnapGrids to workers");
+    log_trace("sent foodGrid dirty hash 0x%X, clean hash 0x%X", foodGrid.crc32Dirty(), foodGrid.crc32Clean());
+
+    return false;
+}
+
+bool World::updateMpiWorker() {
+    // receive RNG seed from master
+    uint64_t seed = 0;
+    MPI_Bcast(&seed, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
+    MPI_Barrier(MPI_COMM_WORLD);
+    log_trace("Received seed from master: 0x%lX", seed);
+
+    // receive SnapGrids from master
+    // as explained above we only receive the dirty buffer (because dirty == clean at the start of
+    // the loop). we will have to call commit() later to ensure the clean is copied across.
+    MPI_Bcast(foodGrid.dirty, foodGrid.width * foodGrid.height, MPI_CXX_BOOL,
+              0, MPI_COMM_WORLD);
+    MPI_Bcast(obstacleGrid.dirty, obstacleGrid.width * obstacleGrid.height,
+              MPI_CXX_BOOL, 0, MPI_COMM_WORLD);
+
+    // now we need to receive pheromoneGrid, as mentioned above it uses cereal, so we will need to
+    // deserialise it
+    int bufSize = pheromoneGrid.width * pheromoneGrid.height * pheromoneGrid.depth
+            * static_cast<int>(sizeof(PheromoneStrength));
+    auto *buf = new char[bufSize];
+    log_trace("Pheromone grid recv buf size: %d bytes", bufSize);
+    MPI_Bcast(buf, bufSize, MPI_CHAR, 0, MPI_COMM_WORLD);
+    // send the buffer off to cereal
+    std::stringstream stream;
+    stream << buf;
+    {
+        cereal::BinaryInputArchive archive(stream);
+        archive(cereal::binary_data(pheromoneGrid.dirty, sizeof(PheromoneStrength) * pheromoneGrid.width
+                                                         * pheromoneGrid.height * pheromoneGrid.depth));
+    }
+    delete[] buf;
+
+    foodGrid.commit();
+    obstacleGrid.commit();
+    pheromoneGrid.commit();
+    MPI_Barrier(MPI_COMM_WORLD);
+    log_trace("Received SnapGrids from master");
+    log_debug("received foodGrid dirty hash 0x%X, clean hash 0x%X", foodGrid.crc32Dirty(), foodGrid.crc32Clean());
+    log_trace("Received pheromoneGrid OK! example: %f", pheromoneGrid.read(0, 0, 0).toColony);
+
+    return false;
+}
+#endif
 
 static std::string generateFileName(const std::string &prefix) {
     // get the current date https://stackoverflow.com/a/16358111/5007892

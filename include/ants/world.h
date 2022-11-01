@@ -12,6 +12,7 @@
 #include "tinycolor/tinycolormap.hpp"
 #include "pcg/pcg_random.hpp"
 #include "ants/snapgrid.h"
+#include "ants/defines.h"
 
 namespace ants {
     struct World {
@@ -26,9 +27,11 @@ namespace ants {
         /// @return true if we should keep iterating the simulation, false if we should quit now
         [[nodiscard]] bool update();
 
-        /// Updates the world for one time step using CUDA. Replaces World::update() when CUDA is enabled.
-        /// @return true if we should keep iterating the simulation, false if we should quit now
-        [[nodiscard]] bool updateCuda();
+        /**
+         * Updates the world for one time step using MPI. Replaces World::update() when MPI is enabled.
+         * @return true if we should keep iterating the simulation, false if we should quit now
+         */
+        [[nodiscard]] bool updateMpi();
 
         /**
          * Sets up PNG TAR disk output. PNG files are written to a TAR file that can then be downloaded
@@ -62,6 +65,10 @@ namespace ants {
         size_t maxAntsLastTick{};
         int32_t width{};
         int32_t height{};
+#if USE_MPI
+        int32_t mpiWorldSize{};
+        int32_t mpiRank{};
+#endif
     private:
         /// Returns a random movement vector for the specified ant
         Vector2i randomMovementVector(const Ant &ant, pcg32_fast &localRng) const;
@@ -81,6 +88,12 @@ namespace ants {
 
         /// Renders a pheromone to a colour value. Returns the colour value between 0.0 and 1.0.
         [[nodiscard]] double pheromoneToColour(int32_t x, int32_t y) const;
+
+        /// MPI master update function
+        [[nodiscard]] bool updateMpiMaster();
+
+        /// MPI worker update function
+        [[nodiscard]] bool updateMpiWorker();
 
 
         SnapGrid2D<bool> foodGrid{};

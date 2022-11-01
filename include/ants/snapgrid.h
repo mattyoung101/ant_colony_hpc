@@ -43,6 +43,16 @@ namespace ants {
             memcpy(clean, dirty, width * height * sizeof(T));
         }
 
+        /// Computes the CRC32 hash of the dirty buffer. Used for data verification.
+        inline constexpr uint32_t crc32Dirty() {
+            return crc32(dirty, width * height * sizeof(T));
+        }
+
+        /// Computes the CRC32 hash of the clean buffer. Used for data verification.
+        inline constexpr uint32_t crc32Clean() {
+            return crc32(clean, width * height * sizeof(T));
+        }
+
         /// Clean buffer
         T *clean{};
         /// Dirty buffer

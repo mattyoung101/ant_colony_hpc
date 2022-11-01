@@ -5,6 +5,7 @@ project(ant_colony LANGUAGES C CXX)
 
 # add MPI package
 find_package(MPI REQUIRED)
+add_definitions(-DOMPI_SKIP_MPICXX)
 message(STATUS "Found MPI: ${MPI_VERSION}")
 
 ## Compile as C++17
@@ -37,6 +38,7 @@ endif()
 
 include_directories(include)
 include_directories(lib)
+include_directories(${MPI_C_INCLUDE_DIRS})
 
 add_executable(ant_colony lib/log/log.c lib/log/log.h src/main.cpp src/world.cpp lib/stb/stb_image.c
     lib/microtar/microtar.c lib/stb/stb_image_write.c src/utils.cpp lib/tinycolor/tinycolormap.hpp
@@ -47,4 +49,4 @@ add_executable(dump_random src/dump_random.cpp lib/log/log.c lib/log/log.h src/u
 
 find_package(Threads REQUIRED)
 find_package(OpenMP REQUIRED)
-target_link_libraries(ant_colony xcb Threads::Threads OpenMP::OpenMP_CXX)
+target_link_libraries(ant_colony xcb Threads::Threads OpenMP::OpenMP_CXX MPI::MPI_C MPI::MPI_CXX)

@@ -31,43 +31,33 @@ how.
 Implementation details:
 - Probably should template this class
 
-TODO: compare parallelising ant update loop vs colony update loop
-
-## CUDA
-For CUDA we will parallelise the ant update loop, not the colony update loop. This is because 
-that way we can use the 3D CUDA grid for (x, y, ant). Also, because vectors are not well supported
-on the GPU.
-
-```
-Upload the SnapGrids (dirty and clean buffer) to the GPU
-
-For each colony:
-    Run CUDA kernel which will simulate each ant in the whole colony
-    Run colony tasks (if we should kill the colony, etc)
-    
-Copy the SnapGrids back from the GPU
-Run serial tasks
-```
-
-**Vector problem:** Basically the main problem is that in the ant update loop we normally insert
-the colony pointer into the `colonyAddAnts` vector. CUDA does not support the STL, so means we 
-cannot insert to this vector from the kernel. CUDA also does not support critical sections either.
-
-This is resolved by making an array the size of the number of ants in the colony. Each ant will write
-to the index in the array true/false depending on whether it thinks the colony should add more ants.
-We then iterate over the array and see if there is at least on true and if so add more ants.
-
-The bigger problem is we need to update the ant's visited positions set. We can't use a set in CUDA.
-We would have to replace this with a bool SnapGrid, which would be a lot slower to look through. It's
-the only option really though.
+**TODO:** compare parallelising ant update loop vs colony update loop
 
 ## MPI
-If CUDA is too hard, we can always do MPI (if that's even any easier lmao fml).
+Acts as a replacement for OpenMP. We will parallelise the ant update loop only (not the whole colony
+loop). Here's what we'll do:
 
-We could either:
+```
+// main.cpp
+Master/Worker: Run init code (it's deterministic, so should be OK). All workers now have same state.
+Master/Worker: Perform code split (change our behaviour based on if we are master or worker).
 
-- Scatter each colony to the workers, and run the ant update loop using OpenMP
-- Scatter each ant to the workers, then gather them (no OpenMP)
+// World::update
+Master (Rank 0): Broadcast the clean buffer for each SnapGrid to all workers.
+Worker (Rank N): Receive the clean buffer and copy into the diry buffer (reduces bandwidth required).
+
+For each colony:
+    Master (Rank 0): Scatter colonies to workers (each worker gets 1 colony)
+    Worker (Rank N) and Master (Rank 0): 
+        #if OMP #pragma omp parallel for #endif
+        For each ant:
+            Process the ant.
+    Master (Rank 0): Gather all colonies from workers.
+    
+Serial code (update SnapGrids, etc).
+```
+
+One important note from the above code is that MPI and OpenMP _can_ be complementary.
 
 ## Evaluation: CUDA vs MPI
 **Reasons to use CUDA:**
