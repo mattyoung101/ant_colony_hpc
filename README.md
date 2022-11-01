@@ -20,8 +20,12 @@ to use the version of CMake I included in this release archive.
 
 ### General instructions
 Compile with at least Clang 10, GCC 10, or later. The latest available version of CMake
-is recommended (at least 3.16.0 required for full features and no hacks). CUDA is also (unfortunately) 
-recommended, but not required.
+is recommended (at least 3.16.0 required for full features and no hacks). OpenMPI v3 is required to
+compile the code, but you don't actually have to run with MPI enabled. Other MPI implementations _may_
+work as well, but certainly not below the MPI 3.0 standard.
+
+In `defines.h` you can choose if you want to use OpenMP, MPI, none, or both, to accelerate the simulator.
+When you set these defines and recompile, the code will change and everything will Just Work(TM) (seriously!)
 
 You can build the project by doing `mkdir cmake-build-release`, `cd cmake-build-release`,
 `cmake -DCMAKE_BUILD_TYPE=Release ..`, `make -j16`. You will then have a binary called `ant_colony`, 
@@ -56,7 +60,6 @@ The following open source libraries are used:
 - [pcg-cpp](https://github.com/imneme/pcg-cpp): C++ implementation of the high-quality PCG RNG algorithm: Apache 2.0 licence
 - [tinycolormap](https://github.com/yuki-koyama/tinycolormap): Matplotlib colour maps in C++: MIT licence
 - [clip](https://github.com/dacap/clip): Clipboard library, used for development purposes only: MIT licence
-- [cereal](https://github.com/USCiLab/cereal): C++ serialisation framework: BSD 3-clause licence
 
 ## Licence
 Hopefully eventually MPL 2.0 once the course is done. For now, academic use at UQ only.

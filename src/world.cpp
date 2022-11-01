@@ -20,7 +20,6 @@
 #include "clip/clip.h"
 #include "ants/defines.h"
 #include <mpi.h>
-#include <cereal/archives/binary.hpp>
 
 using namespace ants;
 
@@ -483,26 +482,42 @@ bool World::updateMpiMaster() {
     MPI_Bcast(obstacleGrid.dirty, obstacleGrid.width * obstacleGrid.height,
               MPI_CXX_BOOL, 0, MPI_COMM_WORLD);
 
-    // the pheromone grid is harder since MPI can't send classes, we will need to list the help of cereal,
-    // a C++ serialisation library
-    std::stringstream stream{};
-    {
-        cereal::BinaryOutputArchive archive(stream);
-        // https://stackoverflow.com/a/27749324/5007892
-        archive(cereal::binary_data(pheromoneGrid.dirty,
-                                    sizeof(PheromoneStrength) * pheromoneGrid.width
-                                    * pheromoneGrid.height * pheromoneGrid.depth));
-        // cereal uses RAII, so we need to put a scope here to make sure the archive is flushed
+    // the pheromone grid is harder since MPI can't send classes. what we will do instead is serialise
+    // it manually using an array of doubles. we will store it like [toColony, toFood, toColony, toFood, ...]
+    int bufSize = pheromoneGrid.width * pheromoneGrid.height * pheromoneGrid.depth * 2;
+    auto *buf = new double[bufSize]{};
+    int bufIdx = 0;
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            for (size_t c = 0; c < colonies.size(); c++) {
+                auto pheromone = pheromoneGrid.read(x, y, c);
+                buf[bufIdx++] = pheromone.toColony;
+                buf[bufIdx++] = pheromone.toFood;
+            }
+        }
     }
-    log_trace("Serialised pheromoneGrid to %d bytes", static_cast<int>(stream.str().size()));
-    hexdump(stream.str().data(), stream.str().size());
-
-    // transmit the serialised array (excuse the awful looking casts)
-    MPI_Bcast(stream.str().data(), static_cast<int>(stream.str().size()),
-              MPI_CHAR, 0, MPI_COMM_WORLD);
+    // transmit the serialised array
+    MPI_Bcast(buf, bufSize, MPI_DOUBLE, 0, MPI_COMM_WORLD);
     MPI_Barrier(MPI_COMM_WORLD);
+
     log_trace("Sent SnapGrids to workers");
-    log_trace("sent foodGrid dirty hash 0x%X, clean hash 0x%X", foodGrid.crc32Dirty(), foodGrid.crc32Clean());
+    log_trace("Sent foodGrid dirty hash 0x%X, clean hash 0x%X", foodGrid.crc32Dirty(), foodGrid.crc32Clean());
+    log_trace("Sent pheromoneGrid buf, hash: 0x%X",
+              crc32(buf, pheromoneGrid.width * pheromoneGrid.height * pheromoneGrid.depth * 2 * sizeof(double)));
+    delete[] buf;
+
+    // scatter colonies to all workers (this includes ourselves, the master!)
+    // we can't broadcast colonies directly, so broadcast colony indices
+    int colonyIdx[colonies.size()];
+    for (size_t i = 0; i < colonies.size(); i++) {
+        colonyIdx[i] = static_cast<int>(i);
+    }
+    int colonyWorkIdx[colonies.size()];
+    memset(colonyWorkIdx, 0, colonies.size() * sizeof(int));
+    log_trace("Before MPI_Scatterv master");
+//    MPI_Scatterv(colonyIdx, ) // TODO this is going to be tough
+    MPI_Barrier(MPI_COMM_WORLD);
+    log_trace("Sent scattered colonies");
 
     return false;
 }
@@ -522,21 +537,24 @@ bool World::updateMpiWorker() {
     MPI_Bcast(obstacleGrid.dirty, obstacleGrid.width * obstacleGrid.height,
               MPI_CXX_BOOL, 0, MPI_COMM_WORLD);
 
-    // now we need to receive pheromoneGrid, as mentioned above it uses cereal, so we will need to
-    // deserialise it
-    int bufSize = pheromoneGrid.width * pheromoneGrid.height * pheromoneGrid.depth
-            * static_cast<int>(sizeof(PheromoneStrength));
-    auto *buf = new char[bufSize];
-    log_trace("Pheromone grid recv buf size: %d bytes", bufSize);
-    MPI_Bcast(buf, bufSize, MPI_CHAR, 0, MPI_COMM_WORLD);
-    // send the buffer off to cereal
-    std::stringstream stream;
-    stream << buf;
-    {
-        cereal::BinaryInputArchive archive(stream);
-        archive(cereal::binary_data(pheromoneGrid.dirty, sizeof(PheromoneStrength) * pheromoneGrid.width
-                                                         * pheromoneGrid.height * pheromoneGrid.depth));
+    // now we need to receive pheromoneGrid, as mentioned above it uses a serialisation format, so
+    // we'll need to deserialise it
+    int bufSize = pheromoneGrid.width * pheromoneGrid.height * pheromoneGrid.depth * 2;
+    auto *buf = new double[bufSize]{};
+    MPI_Bcast(buf, bufSize, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+    int i = 0;
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            for (size_t c = 0; c < colonies.size(); c++) {
+                auto toColony = buf[i++];
+                auto toFood = buf[i++];
+                pheromoneGrid.write(x, y, c, PheromoneStrength(toColony, toFood));
+            }
+        }
     }
+    log_trace("Received pheromoneGrid buf, hash: 0x%X",
+              crc32(buf, pheromoneGrid.width * pheromoneGrid.height * pheromoneGrid.depth * 2 * sizeof(double)));
     delete[] buf;
 
     foodGrid.commit();
@@ -544,8 +562,17 @@ bool World::updateMpiWorker() {
     pheromoneGrid.commit();
     MPI_Barrier(MPI_COMM_WORLD);
     log_trace("Received SnapGrids from master");
-    log_debug("received foodGrid dirty hash 0x%X, clean hash 0x%X", foodGrid.crc32Dirty(), foodGrid.crc32Clean());
-    log_trace("Received pheromoneGrid OK! example: %f", pheromoneGrid.read(0, 0, 0).toColony);
+    log_trace("Received foodGrid dirty hash 0x%X, clean hash 0x%X", foodGrid.crc32Dirty(), foodGrid.crc32Clean());
+
+    // receive the scattered colonies from the master. these will be the indices of the colonies we
+    // are supposed to process
+    int colonyIdx[colonies.size()];
+    memset(colonyIdx, 0, colonies.size() * sizeof(int));
+    log_trace("Before MPI_Scatter worker");
+    MPI_Scatter(nullptr, 0, MPI_INT, colonyIdx,
+                static_cast<int>(colonies.size()), MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Barrier(MPI_COMM_WORLD);
+    log_trace("Received scattered colonies");
 
     return false;
 }

@@ -60,12 +60,6 @@ static const uint32_t crc32_tab[] = {
         0xb40bbe37, 0xc30c8ea1, 0x5a05df1b, 0x2d02ef8d
 };
 
-/**
- * Computes the CRC32 hash of the buffer.
- * @param buf contiguous buffer
- * @param size size of buf in bytes
- * @return CRC32 sum of the buffer
- */
 uint32_t ants::crc32(const void *buf, size_t size) {
     const auto *p = static_cast<const uint8_t *>(buf);
     uint32_t crc;

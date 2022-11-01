@@ -45,9 +45,9 @@ Master/Worker: Perform code split (change our behaviour based on if we are maste
 // World::update
 Master (Rank 0): Broadcast the clean buffer for each SnapGrid to all workers.
 Worker (Rank N): Receive the clean buffer and copy into the diry buffer (reduces bandwidth required).
+Master (Rank 0): Scatter colonies to workers (each worker gets 1 colony)
 
 For each colony:
-    Master (Rank 0): Scatter colonies to workers (each worker gets 1 colony)
     Worker (Rank N) and Master (Rank 0): 
         #if OMP #pragma omp parallel for #endif
         For each ant:
