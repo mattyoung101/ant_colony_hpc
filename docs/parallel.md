@@ -48,14 +48,18 @@ Worker (Rank N): Receive the clean buffer and copy into the diry buffer (reduces
 Master (Rank 0): Scatter colonies to workers (each worker gets 1 colony)
 
 For each colony:
-    Worker (Rank N) and Master (Rank 0): 
+    Worker (Rank N) including master: 
         #if OMP #pragma omp parallel for #endif
-        For each ant:
+        For each ant we have to process:
             Process the ant.
-    Master (Rank 0): Gather all colonies from workers.
+    Master (Rank 0): Gather all colonies from workers. <-- WE CAN'T DO THIS!
+    it would be better to have each snapgrid record tiles we wrote to, then send them back & have master merge them.
     
-Serial code (update SnapGrids, etc).
+Serial code (update SnapGrids, colony work, etc).
 ```
+
+We really want to avoid having to sent around the colony list, if we can avoid that in any way
+it would be really good.
 
 One important note from the above code is that MPI and OpenMP _can_ be complementary.
 

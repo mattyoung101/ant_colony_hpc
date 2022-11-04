@@ -127,5 +127,10 @@ namespace ants {
         bool tarfileOk = false;
         /// Path to where the recording is saved
         std::string recordingPath{};
+
+#if USE_MPI
+        // number of colonies per MPI worker
+        int32_t mpiColoniesPerWorker{};
+#endif
     };
 };

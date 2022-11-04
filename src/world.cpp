@@ -129,6 +129,25 @@ World::World(const std::string& filename, mINI::INIStructure config) {
     }
     pheromoneGrid = SnapGrid3D<PheromoneStrength>(width, height, static_cast<int>(colonies.size()));
 
+    // initialise MPI
+#if USE_MPI
+    MPI_Comm_size(MPI_COMM_WORLD, &mpiWorldSize);
+    MPI_Comm_rank(MPI_COMM_WORLD, &mpiRank);
+    log_info("MPI world size: %d, my rank: %d", mpiWorldSize, mpiRank);
+
+    // because we are using MPI_Scatter, not MPI_Scatterv, number of colonies must be divisible b
+    // number of MPI workers
+    if (colonies.size() % mpiWorldSize != 0) {
+        std::ostringstream oss;
+        oss << "Number of colonies (" << colonies.size() << ") is not divisible by number of "
+                                                            "MPI workers (" << mpiWorldSize << ")!";
+        throw std::runtime_error(oss.str());
+    }
+    mpiColoniesPerWorker = static_cast<int32_t>(colonies.size()) / mpiWorldSize;
+    log_info("MPI will use %d colonies per worker (%zu colonies total, %d workers)", mpiColoniesPerWorker,
+             colonies.size(), mpiWorldSize);
+#endif
+
     // load INI values
     pheromoneDecayFactor = std::stod(config["Pheromones"]["decay_factor"]);
     pheromoneGainFactor = std::stod(config["Pheromones"]["gain_factor"]);
@@ -266,6 +285,7 @@ bool World::update() {
 #pragma omp parallel default(none) shared(colonyAddAnts, maxAnts, antsAlive, seed)
 #endif
     {
+        // setup thread local RNG
         pcg32_fast localRng{};
         localRng.seed(seed);
         // so that we don't kill all the ants at once (which looks weird), add some extra noise to the
@@ -281,12 +301,15 @@ bool World::update() {
             if (colony->isDead) {
                 continue;
             }
-            for (size_t a = 0; a < colony->ants.size(); a++) { // TODO hardcode colony->ants
+
+            // main ant update loop
+            for (size_t a = 0; a < colony->ants.size(); a++) {
                 auto ant = &colony->ants[a];
                 // skip dead ants
                 if (ant->isDead) {
                     continue;
                 }
+                // TODO move the below code out to World::updateAnt - although this will change profiling :(
                 // position the ant might move to
                 auto newX = ant->pos.x;
                 auto newY = ant->pos.y;
@@ -377,7 +400,6 @@ bool World::update() {
                 if (!ant->holdingFood) {
                     ant->ticksSinceLastUseful++;
                 }
-
                 // possibly kill this ant if its time has expired (+ some noise, to give it a little extra shot
                 // at life)
                 if (ant->ticksSinceLastUseful > antKillNotUseful + antKillNoise(rng)) {
@@ -425,7 +447,7 @@ bool World::update() {
             antsAlive += colony->ants.size();
         }
 
-        // update max ants statistics
+        // update max ants statistics based on this colony's data
         if (antsAlive > maxAnts) {
             maxAnts = antsAlive;
         }
@@ -439,7 +461,9 @@ bool World::update() {
     pheromoneGrid.commit();
     obstacleGrid.commit();
 
-    // count food remaining TODO optimise this with something
+    // count food remaining, to know if we should do early exit
+    // would be nice to optimise this using intrinsics (like popcnt), hopefully the compiler is smart
+    // enough to do something
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
             if (foodGrid.read(x, y)) {
@@ -447,7 +471,6 @@ bool World::update() {
             }
         }
     }
-
     // tell main.cpp if we should loop again or not
     if (antsAlive <= 0) {
         log_info("All ants have died");
@@ -512,10 +535,11 @@ bool World::updateMpiMaster() {
     for (size_t i = 0; i < colonies.size(); i++) {
         colonyIdx[i] = static_cast<int>(i);
     }
-    int colonyWorkIdx[colonies.size()];
-    memset(colonyWorkIdx, 0, colonies.size() * sizeof(int));
+    // these are the colonies that we, the master, should work on
+    int colonyWorkIdx[mpiColoniesPerWorker];
     log_trace("Before MPI_Scatterv master");
-//    MPI_Scatterv(colonyIdx, ) // TODO this is going to be tough
+    MPI_Scatter(colonyIdx, mpiColoniesPerWorker, MPI_INT,
+                colonyWorkIdx, mpiColoniesPerWorker, MPI_INT, 0, MPI_COMM_WORLD);
     MPI_Barrier(MPI_COMM_WORLD);
     log_trace("Sent scattered colonies");
 
@@ -543,12 +567,12 @@ bool World::updateMpiWorker() {
     auto *buf = new double[bufSize]{};
     MPI_Bcast(buf, bufSize, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
-    int i = 0;
+    int index = 0;
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
             for (size_t c = 0; c < colonies.size(); c++) {
-                auto toColony = buf[i++];
-                auto toFood = buf[i++];
+                auto toColony = buf[index++];
+                auto toFood = buf[index++];
                 pheromoneGrid.write(x, y, c, PheromoneStrength(toColony, toFood));
             }
         }
@@ -566,13 +590,15 @@ bool World::updateMpiWorker() {
 
     // receive the scattered colonies from the master. these will be the indices of the colonies we
     // are supposed to process
-    int colonyIdx[colonies.size()];
-    memset(colonyIdx, 0, colonies.size() * sizeof(int));
+    int colonyWorkIdx[mpiColoniesPerWorker];
     log_trace("Before MPI_Scatter worker");
-    MPI_Scatter(nullptr, 0, MPI_INT, colonyIdx,
-                static_cast<int>(colonies.size()), MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Scatter(nullptr, 0, MPI_INT, colonyWorkIdx,
+                mpiColoniesPerWorker, MPI_INT, 0, MPI_COMM_WORLD);
     MPI_Barrier(MPI_COMM_WORLD);
     log_trace("Received scattered colonies");
+
+    // time to process them!!
+    // TODO
 
     return false;
 }

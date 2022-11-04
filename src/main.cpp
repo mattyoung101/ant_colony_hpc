@@ -72,11 +72,6 @@ int main(int argc, char *argv[]) {
 
     // load the world into memory
     auto world = World(config["Simulation"]["grid_file"], config);
-#if USE_MPI
-    MPI_Comm_size(MPI_COMM_WORLD, &world.mpiWorldSize);
-    MPI_Comm_rank(MPI_COMM_WORLD, &world.mpiRank);
-    log_info("MPI world size: %d, my rank: %d", world.mpiWorldSize, world.mpiRank);
-#endif
 
     // setup recording
     bool recordingEnabled;
