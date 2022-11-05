@@ -1,4 +1,4 @@
-// World source file
+// World source file. Most of the simulator is here.
 // Matt Young, 2022
 #include <stdexcept>
 #include <sstream>
@@ -309,7 +309,6 @@ bool World::update() {
                 if (ant->isDead) {
                     continue;
                 }
-                // TODO move the below code out to World::updateAnt - although this will change profiling :(
                 // position the ant might move to
                 auto newX = ant->pos.x;
                 auto newY = ant->pos.y;
@@ -491,6 +490,21 @@ bool World::updateMpi() {
     }
 }
 
+void World::updateColoniesMpi(int *colonyWorkIdx, uint64_t seed) {
+    for (int c = 0; c < mpiColoniesPerWorker; c++) {
+        auto colony = &colonies[c];
+        // skip dead colonies
+        if (colony->isDead) {
+            continue;
+        }
+
+        // main ant update loop
+        for (size_t a = 0; a < colony->ants.size(); a++) {
+            // TODO
+        }
+    }
+}
+
 bool World::updateMpiMaster() {
     // first, generate and broadcast the RNG seed to all our workers
     uint64_t seed = rng();
@@ -598,7 +612,9 @@ bool World::updateMpiWorker() {
     log_trace("Received scattered colonies");
 
     // time to process them!!
-    // TODO
+    updateColoniesMpi(colonyWorkIdx, seed);
+
+    // TODO send master back all the data
 
     return false;
 }

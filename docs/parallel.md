@@ -40,7 +40,6 @@ loop). Here's what we'll do:
 ```
 // main.cpp
 Master/Worker: Run init code (it's deterministic, so should be OK). All workers now have same state.
-Master/Worker: Perform code split (change our behaviour based on if we are master or worker).
 
 // World::update
 Master (Rank 0): Broadcast the clean buffer for each SnapGrid to all workers.
@@ -49,13 +48,14 @@ Master (Rank 0): Scatter colonies to workers (each worker gets 1 colony)
 
 For each colony:
     Worker (Rank N) including master: 
-        #if OMP #pragma omp parallel for #endif
+        #pragma omp parallel for (if USE_OMP is enabled)
         For each ant we have to process:
             Process the ant.
-    Master (Rank 0): Gather all colonies from workers. <-- WE CAN'T DO THIS!
-    it would be better to have each snapgrid record tiles we wrote to, then send them back & have master merge them.
+        Send master indices of colonies that need ants to be added to them.
+        Send master updated SnapGrids and which tiles were written.
+    Master: Receive data from all workers.
     
-Serial code (update SnapGrids, colony work, etc).
+Master: Serial code (update SnapGrids, colony work, etc).
 ```
 
 We really want to avoid having to sent around the colony list, if we can avoid that in any way

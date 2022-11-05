@@ -1,4 +1,4 @@
-// World class. Defines the grid in the world.
+// World class header. Most of the simulator code is in world.cpp/world.h.
 // Matt Young, 2022
 #pragma once
 #include <cstdint>
@@ -85,6 +85,15 @@ namespace ants {
          * @return pair: first value is the strongest direction, second value is the strength
          */
         [[nodiscard]] std::pair<Vector2i, double> computePheromoneVector(const Colony &colony, const Ant &ant) const;
+
+#if USE_MPI
+        /**
+         * Updates the selected colonies and their ants, for use in MPI
+         * @param colonyWorkIdx indices of colonies to update, array of length mpiColoniesPerWorker
+         * @param seed seed to initialise pcg32_fast rng with
+         */
+        void updateColoniesMpi(int *colonyWorkIdx, uint64_t seed);
+#endif
 
         /// Renders a pheromone to a colour value. Returns the colour value between 0.0 and 1.0.
         [[nodiscard]] double pheromoneToColour(int32_t x, int32_t y) const;

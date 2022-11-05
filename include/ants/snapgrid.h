@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cstring>
 #include "log/log.h"
+#include "ants/defines.h"
 
 // Indexing: https://softwareengineering.stackexchange.com/a/212813
 
@@ -20,6 +21,9 @@ namespace ants {
             log_debug("SnapGrid2D sizeof(T): %lu", sizeof(T));
             clean = new T[width * height]{};
             dirty = new T[width * height]{};
+#if USE_MPI
+            written = new bool[width * height]{};
+#endif
         }
 
         SnapGrid2D() = default;
@@ -27,6 +31,9 @@ namespace ants {
         /// Writes a value into the dirty buffer
         inline constexpr void write(int32_t x, int32_t y, T value) {
             dirty[x + width * y] = value;
+#if USE_MPI
+            written[x + width * y] = true;
+#endif
         }
 
 
@@ -41,6 +48,9 @@ namespace ants {
          */
         inline constexpr void commit() {
             memcpy(clean, dirty, width * height * sizeof(T));
+#if USE_MPI
+            memset(written, 0, width * height * sizeof(bool));
+#endif
         }
 
         /// Computes the CRC32 hash of the dirty buffer. Used for data verification.
@@ -57,6 +67,10 @@ namespace ants {
         T *clean{};
         /// Dirty buffer
         T *dirty{};
+#if USE_MPI
+        /// Positions in the dirty array that have been written since the last flush
+        bool *written{};
+#endif
         int32_t width{}, height{};
     };
 
@@ -72,8 +86,11 @@ namespace ants {
             log_debug("new SnapGrid3D, width: %d, height: %d, depth: %d, array size: %d, bytes: %lu", width,
                       height, depth, width * height * depth, width * height * depth * sizeof(T));
             log_debug("SnapGrid3D sizeof(T): %lu", sizeof(T));
-            clean = new T[width * height * depth];
-            dirty = new T[width * height * depth];
+            clean = new T[width * height * depth]{};
+            dirty = new T[width * height * depth]{};
+#if USE_MPI
+            written = new bool[width * height * depth]{};
+#endif
         }
 
         SnapGrid3D() = default;
@@ -82,6 +99,9 @@ namespace ants {
         template<class I>
         inline constexpr void write(int32_t x, int32_t y, I z, T value) {
             dirty[x + width * y + width * height * z] = value;
+#if USE_MPI
+            written[x + width * y + width * height * z] = true;
+#endif
         }
 
         /// Reads a value from the snapshot grid, from the clean buffer
@@ -96,12 +116,19 @@ namespace ants {
          */
         inline constexpr void commit() {
             memcpy(clean, dirty, width * height * depth * sizeof(T));
+#if USE_MPI
+            memset(written, 0, width * height * depth * sizeof(bool));
+#endif
         }
 
         /// Clean buffer
         T *clean{};
         /// Dirty buffer
         T *dirty{};
+#if USE_MPI
+        /// Positions in the dirty array that have been written since the last flush
+        bool *written{};
+#endif
         int32_t width{}, height{}, depth{};
     };
 }
