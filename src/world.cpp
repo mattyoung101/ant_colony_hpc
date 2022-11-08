@@ -557,6 +557,10 @@ bool World::updateMpiMaster() {
     MPI_Barrier(MPI_COMM_WORLD);
     log_trace("Sent scattered colonies");
 
+    // do the work the master is required to do
+    updateColoniesMpi(colonyWorkIdx, seed);
+    MPI_Barrier(MPI_COMM_WORLD);
+
     return false;
 }
 
@@ -613,6 +617,7 @@ bool World::updateMpiWorker() {
 
     // time to process them!!
     updateColoniesMpi(colonyWorkIdx, seed);
+    MPI_Barrier(MPI_COMM_WORLD);
 
     // TODO send master back all the data
 

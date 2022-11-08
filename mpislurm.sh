@@ -1,7 +1,7 @@
 #!/bin/bash -l
 #
 #SBATCH --job-name=ant_colony
-#SBATCH --nodes=1
+#SBATCH --nodes=4
 #SBATCH --ntasks=4
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=8
@@ -11,7 +11,8 @@
 #SBATCH -o log_%j.out
 #SBATCH --mail-user=SodiumSandwich@outlook.com
 #SBATCH --mail-type=ALL
-# TODO make this MPI compatible
+# force running on a particular cluster (the Xeon Gold ones) for reproducibility
+#SBATCH --constraint=R640
 
 # Slurm job for the MPI version of the ant colony
 

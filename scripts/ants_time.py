@@ -4,15 +4,14 @@ import matplotlib.pyplot as plt
 import tarfile
 
 FILES = {
-    # Rev1 graph
-    # "Release Serial": "../results/SERIAL_ants_31-10-2022_05-02-21.tar",
-    # "Release OpenMP (16 threads)": "../results/OMP_ants_31-10-2022_05-01-22.tar",
-    # "Release OpenMP (32 threads)": "../results/OMP32_ants_31-10-2022_15-20-33.tar",
+    # Impact of ant count on performance graph (each using same CPU on getafix, smp-7-whatever)
+    # "Release Serial": "../results/results_omp_final/SERIAL_goodcpu_ants_02-11-2022_00-08-20.tar",
+    # "Release OpenMP (16 threads)": "../results/results_omp_final/OMP16_goodcpu_ants_02-11-2022_00-10-43.tar",
+    # "Release OpenMP (32 threads)": "../results/results_omp_final/OMP32_goodcpu_ants_02-11-2022_00-10-11.tar",
 
-    # Rev2 graph (each using same CPU on getafix, smp-7-whatever)
-    "Release Serial": "../results/results_omp_final/SERIAL_goodcpu_ants_02-11-2022_00-08-20.tar",
-    "Release OpenMP (16 threads)": "../results/results_omp_final/OMP16_goodcpu_ants_02-11-2022_00-10-43.tar",
-    "Release OpenMP (32 threads)": "../results/results_omp_final/OMP32_goodcpu_ants_02-11-2022_00-10-11.tar",
+    # Comparing paralleling the ant update loop vs. parallelising the colony update loop
+    # "Parallel colony update": "../results/results_omp_final/OMP32_goodcpu_ants_02-11-2022_00-10-11.tar",
+    # "Parallel ant update": "../results/results_omp_final/OMP32_goodcpu_antsparallel_ants_05-11-2022_23-47-56.tar"
 
     # this one is for my  PC
     # "Release OpenMP (32 threads) (Ryzen 9 5950X)": "../results/results_omp_final/OMP32_Ryzen_ants_01-11-2022_06-20-14.tar"
