@@ -57,30 +57,6 @@ For each colony:
 Master: Serial code (update SnapGrids, colony work, etc).
 ```
 
-Here's an alternative version where we ONLY parallelise the ant update loop (i.e. dispatch ants to
-workers, not whole colonies):
-
-```
-// main.cpp
-Master/Worker: Run init code (it's deterministic, so should be OK). All workers now have same state.
-
-// World::update
-For each colony:
-    Master (Rank 0): Broadcast the clean buffer for each SnapGrid to all workers.
-    Worker (Rank N): Receive the clean buffer and copy into the diry buffer (reduces bandwidth required).
-    Master (Rank 0): Scatter colonies to workers (each worker gets 1 colony)
-    
-    Worker (Rank N) including master: 
-        #pragma omp parallel for (if USE_OMP is enabled)
-        For each ant we have to process:
-            Process the ant.
-        Send master indices of colonies that need ants to be added to them.
-        Send master updated SnapGrids and which tiles were written.
-    Master: Receive data from all workers.
-    
-Master: Serial code (update SnapGrids, colony work, etc).
-```
-
 We really want to avoid having to sent around the colony list, if we can avoid that in any way
 it would be really good.
 

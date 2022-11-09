@@ -6,9 +6,6 @@ for more information.
 
 **Author:** Matt Young (m.young2@uqconnect.edu.au)
 
-## Features
-TODO
-
 ## Building and running
 ### Compiling on getafix
 Run `./build_getafix.sh` in the root directory of the project. It should do everything automatically.
@@ -26,10 +23,14 @@ work as well, but certainly not below the MPI 3.0 standard.
 
 In `defines.h` you can choose if you want to use OpenMP, MPI, none, or both, to accelerate the simulator.
 When you set these defines and recompile, the code will change and everything will Just Work(TM) (seriously!)
+If all of them are turned off, the ant sim will default to a serial update.
 
 You can build the project by doing `mkdir cmake-build-release`, `cd cmake-build-release`,
 `cmake -DCMAKE_BUILD_TYPE=Release ..`, `make -j16`. You will then have a binary called `ant_colony`, 
 which you can call from the root directory of the project by doing `./cmake-build-release/ant_colony`.
+
+Build targets are Debug (-O0 + ASan + UBSan), Release (-O3 -march=native -mtune=native) and Profile (just -O0),
+feel free to choose between them.
 
 It's highly recommended to run the project in CLion, as that's what I used to develop.
 

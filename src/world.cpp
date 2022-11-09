@@ -20,6 +20,12 @@
 #include "clip/clip.h"
 #include "ants/defines.h"
 #include <mpi.h>
+#include "cereal/types/map.hpp"
+#include "cereal/types/vector.hpp"
+#include "cereal/types/string.hpp"
+#include "cereal/types/complex.hpp"
+#include "cereal/archives/json.hpp"
+#include "cereal/archives/binary.hpp"
 
 using namespace ants;
 
@@ -259,8 +265,113 @@ void World::decayPheromones() {
         }
     }
 
-    // force a commit, because we do want the world do be updated when this routine returns
+    // force a commit, because we want the world to be updated when this routine returns
     pheromoneGrid.commit();
+}
+
+bool World::updateAnt(Ant *ant, Colony *colony, pcg32_fast &localRng) {
+    bool shouldAddMoreAnts = false;
+
+    // so that we don't kill all the ants at once (which looks weird), add some extra noise to the
+    // time we might kill them
+    std::uniform_int_distribution<int> antKillNoise(0, 75);
+
+    // position the ant might move to
+    auto newX = ant->pos.x;
+    auto newY = ant->pos.y;
+
+    // see what pheromones are around the ant
+    auto [phVector, phStrength] = computePheromoneVector(*colony, *ant);
+    Vector2i movement{};
+    if (phStrength >= antUsePheromone) {
+        // strong pheromone, use that
+        movement = phVector;
+    } else {
+        // pheromone not strong enough, move randomly
+        movement = randomMovementVector(*ant, localRng);
+    }
+    // apply movement vector
+    newX += movement.x;
+    newY += movement.y;
+
+    // only move the ant if it wouldn't intersect an obstacle, and is in bounds
+    // also don't allow ants to walk on food if they are already holding food
+    if (newX < 0 || newY < 0 || newX >= width || newY >= height
+        || obstacleGrid.read(newX, newY)
+        || (ant->holdingFood && foodGrid.read(newX, newY))) {
+        // reached an obstacle, flip our direction ("bounce off" the obstacle)
+        ant->preferredDir.x *= -1;
+        ant->preferredDir.y *= -1;
+        // don't update ant position
+    } else {
+        // checks passed, so update the ant data
+        ant->pos.x = newX;
+        ant->pos.y = newY;
+        ant->visitedPos.insert(Vector2i(newX, newY));
+    }
+
+    // update world
+#if USE_OMP
+#pragma omp critical
+#endif
+    {
+        if (ant->holdingFood) {
+            // holding food, add to the "to food" strength, so we let other ants know where we
+            // found food
+            auto cur = pheromoneGrid.read(ant->pos.x, ant->pos.y, colony->id);
+            cur.toFood += pheromoneGainFactor;
+            pheromoneGrid.write(ant->pos.x, ant->pos.y, colony->id, cur);
+        } else {
+            // looking for food, update the "to colony" strength, so other ants know how to get home
+            auto cur = pheromoneGrid.read(ant->pos.x, ant->pos.y, colony->id);
+            cur.toColony += pheromoneGainFactor;
+            pheromoneGrid.write(ant->pos.x, ant->pos.y, colony->id, cur);
+        }
+    }
+
+    // update ant state
+    if (!ant->holdingFood && foodGrid.read(ant->pos.x, ant->pos.y)) {
+        // we're on food now!
+        log_trace("Ant id %lu in colony %d just found food at %d,%d", ant->id,
+                  colony->id, ant->pos.x, ant->pos.y);
+        ant->holdingFood = true;
+        ant->ticksSinceLastUseful = 0;
+        // since the ant has reached food, invert its direction for heading back
+        ant->preferredDir.x *= -1;
+        ant->preferredDir.y *= -1;
+        // reset the positions the ant has visited for going home
+        ant->visitedPos.clear();
+
+        // remove food from the world
+#if USE_OMP
+#pragma omp critical
+#endif
+        foodGrid.write(ant->pos.x, ant->pos.y, false);
+    } else if (ant->holdingFood && ant->pos.distance(colony->pos) <= colonyReturnDist) {
+        // got our food and returned home (near enough to the colony)
+        log_trace("Ant id %lu in colony %d just returned home with food", ant->id,
+                  colony->id);
+        ant->holdingFood = false;
+        ant->ticksSinceLastUseful = 0;
+        ant->visitedPos.clear();
+
+        // boost the colony
+        shouldAddMoreAnts = true;
+    } // end update ant state
+
+    // update ticks since last useful for the ant
+    if (!ant->holdingFood) {
+        ant->ticksSinceLastUseful++;
+    }
+    // possibly kill this ant if its time has expired (+ some noise, to give it a little extra shot
+    // at life)
+    if (ant->ticksSinceLastUseful > antKillNotUseful + antKillNoise(rng)) {
+        log_trace("Ant id %lu in colony %d has died at %d,%d", ant->id, colony->id,
+                  ant->pos.x, ant->pos.y);
+        ant->isDead = true;
+    }
+
+    return shouldAddMoreAnts;
 }
 
 bool World::update() {
@@ -301,7 +412,6 @@ bool World::update() {
             if (colony->isDead) {
                 continue;
             }
-
             // main ant update loop
             for (size_t a = 0; a < colony->ants.size(); a++) {
                 auto ant = &colony->ants[a];
@@ -309,102 +419,10 @@ bool World::update() {
                 if (ant->isDead) {
                     continue;
                 }
-                // position the ant might move to
-                auto newX = ant->pos.x;
-                auto newY = ant->pos.y;
-
-                // see what pheromones are around the ant
-                auto [phVector, phStrength] = computePheromoneVector(*colony, *ant);
-                Vector2i movement{};
-                if (phStrength >= antUsePheromone) {
-                    // strong pheromone, use that
-                    movement = phVector;
-                } else {
-                    // pheromone not strong enough, move randomly
-                    movement = randomMovementVector(*ant, localRng);
-                }
-                // apply movement vector
-                newX += movement.x;
-                newY += movement.y;
-
-                // only move the ant if it wouldn't intersect an obstacle, and is in bounds
-                // also don't allow ants to walk on food if they are already holding food
-                if (newX < 0 || newY < 0 || newX >= width || newY >= height
-                    || obstacleGrid.read(newX, newY)
-                    || (ant->holdingFood && foodGrid.read(newX, newY))) {
-                    // reached an obstacle, flip our direction ("bounce off" the obstacle)
-                    ant->preferredDir.x *= -1;
-                    ant->preferredDir.y *= -1;
-                    // don't update ant position
-                } else {
-                    // checks passed, so update the ant data
-                    ant->pos.x = newX;
-                    ant->pos.y = newY;
-                    ant->visitedPos.insert(Vector2i(newX, newY));
-                }
-
-                // update world
-#if USE_OMP
-#pragma omp critical
-#endif
-                {
-                    if (ant->holdingFood) {
-                        // holding food, add to the "to food" strength, so we let other ants know where we
-                        // found food
-                        auto cur = pheromoneGrid.read(ant->pos.x, ant->pos.y, colony->id);
-                        cur.toFood += pheromoneGainFactor;
-                        pheromoneGrid.write(ant->pos.x, ant->pos.y, colony->id, cur);
-                    } else {
-                        // looking for food, update the "to colony" strength, so other ants know how to get home
-                        auto cur = pheromoneGrid.read(ant->pos.x, ant->pos.y, colony->id);
-                        cur.toColony += pheromoneGainFactor;
-                        pheromoneGrid.write(ant->pos.x, ant->pos.y, colony->id, cur);
-                    }
-                }
-
-                // update ant state
-                if (!ant->holdingFood && foodGrid.read(ant->pos.x, ant->pos.y)) {
-                    // we're on food now!
-                    log_trace("Ant id %lu in colony %d just found food at %d,%d", ant->id,
-                              colony->id, ant->pos.x, ant->pos.y);
-                    ant->holdingFood = true;
-                    ant->ticksSinceLastUseful = 0;
-                    // since the ant has reached food, invert its direction for heading back
-                    ant->preferredDir.x *= -1;
-                    ant->preferredDir.y *= -1;
-                    // reset the positions the ant has visited for going home
-                    ant->visitedPos.clear();
-
-                    // remove food from the world
-#if USE_OMP
-#pragma omp critical
-#endif
-                    foodGrid.write(ant->pos.x, ant->pos.y, false);
-                } else if (ant->holdingFood && ant->pos.distance(colony->pos) <= colonyReturnDist) {
-                    // got our food and returned home (near enough to the colony)
-                    log_trace("Ant id %lu in colony %d just returned home with food", ant->id,
-                              colony->id);
-                    ant->holdingFood = false;
-                    ant->ticksSinceLastUseful = 0;
-                    ant->visitedPos.clear();
-
-                    // boost the colony
-#if USE_OMP
-#pragma omp critical
-#endif
+                // update the ant
+                if (updateAnt(ant, colony, localRng)) {
+                    // record that we should add more ants to this colony
                     colonyAddAnts.emplace_back(colony);
-                } // end update ant state
-
-                // update ticks since last useful for the ant
-                if (!ant->holdingFood) {
-                    ant->ticksSinceLastUseful++;
-                }
-                // possibly kill this ant if its time has expired (+ some noise, to give it a little extra shot
-                // at life)
-                if (ant->ticksSinceLastUseful > antKillNotUseful + antKillNoise(rng)) {
-                    log_trace("Ant id %lu in colony %d has died at %d,%d", ant->id, colony->id,
-                              ant->pos.x, ant->pos.y);
-                    ant->isDead = true;
                 }
             } // end each ant in colony loop
         } // end each colony loop
@@ -479,6 +497,13 @@ bool World::update() {
         shouldContinue = false;
     }
     return shouldContinue;
+
+    // CEREAL TEST
+//    std::stringstream ss;
+//    cereal::BinaryOutputArchive ar(ss);
+//    ar(cereal::make_nvp("data", colonies));
+//    std::ofstream file("file.bin");
+//    file << ss.str();
 }
 
 #if USE_MPI
@@ -490,130 +515,43 @@ bool World::updateMpi() {
     }
 }
 
-void World::updateColoniesMpi(int *colonyWorkIdx, uint64_t seed) {
-    // setup worker local RNG
-    pcg32_fast localRng{};
-    localRng.seed(seed);
-    // so that we don't kill all the ants at once (which looks weird), add some extra noise to the
-    // time we might kill them
-    std::uniform_int_distribution<int> antKillNoise(0, 75);
-
-    for (int c = 0; c < mpiColoniesPerWorker; c++) {
-        auto colony = &colonies[c];
-        // skip dead colonies
-        if (colony->isDead) {
-            continue;
-        }
-
-        // main ant update loop (TODO openmp)
+void World::updateColoniesMpi(int *colonyWorkIdx, bool *colonyAddAnts, uint64_t seed) {
+    // update the ants
 #if USE_OMP
-#pragma omp parallel for default(none) shared(colony, localRng, )
+#pragma omp parallel default(none) shared(colonyWorkIdx, seed, colonyAddAnts)
 #endif
-        for (size_t a = 0; a < colony->ants.size(); a++) {
-            auto ant = &colony->ants[a];
-            // skip dead ants
-            if (ant->isDead) {
+    {
+        // setup thread local RNG
+        pcg32_fast localRng{};
+        localRng.seed(seed);
+        // so that we don't kill all the ants at once (which looks weird), add some extra noise to the
+        // time we might kill them
+        std::uniform_int_distribution<int> antKillNoise(0, 75);
+
+#if USE_OMP
+#pragma omp for
+#endif
+        for (int c = 0; c < mpiColoniesPerWorker; c++) {
+            auto colony = &colonies[colonyWorkIdx[c]];
+            // skip dead colonies
+            if (colony->isDead) {
                 continue;
             }
-            // position the ant might move to
-            auto newX = ant->pos.x;
-            auto newY = ant->pos.y;
-
-            // see what pheromones are around the ant
-            auto [phVector, phStrength] = computePheromoneVector(*colony, *ant);
-            Vector2i movement{};
-            if (phStrength >= antUsePheromone) {
-                // strong pheromone, use that
-                movement = phVector;
-            } else {
-                // pheromone not strong enough, move randomly
-                movement = randomMovementVector(*ant, localRng);
-            }
-            // apply movement vector
-            newX += movement.x;
-            newY += movement.y;
-
-            // only move the ant if it wouldn't intersect an obstacle, and is in bounds
-            // also don't allow ants to walk on food if they are already holding food
-            if (newX < 0 || newY < 0 || newX >= width || newY >= height
-                || obstacleGrid.read(newX, newY)
-                || (ant->holdingFood && foodGrid.read(newX, newY))) {
-                // reached an obstacle, flip our direction ("bounce off" the obstacle)
-                ant->preferredDir.x *= -1;
-                ant->preferredDir.y *= -1;
-                // don't update ant position
-            } else {
-                // checks passed, so update the ant data
-                ant->pos.x = newX;
-                ant->pos.y = newY;
-                ant->visitedPos.insert(Vector2i(newX, newY));
-            }
-
-            // update world
-#if USE_OMP
-#pragma omp critical
-#endif
-            {
-                if (ant->holdingFood) {
-                    // holding food, add to the "to food" strength, so we let other ants know where we
-                    // found food
-                    auto cur = pheromoneGrid.read(ant->pos.x, ant->pos.y, colony->id);
-                    cur.toFood += pheromoneGainFactor;
-                    pheromoneGrid.write(ant->pos.x, ant->pos.y, colony->id, cur);
-                } else {
-                    // looking for food, update the "to colony" strength, so other ants know how to get home
-                    auto cur = pheromoneGrid.read(ant->pos.x, ant->pos.y, colony->id);
-                    cur.toColony += pheromoneGainFactor;
-                    pheromoneGrid.write(ant->pos.x, ant->pos.y, colony->id, cur);
+            // main ant update loop
+            for (size_t a = 0; a < colony->ants.size(); a++) {
+                auto ant = &colony->ants[a];
+                // skip dead ants
+                if (ant->isDead) {
+                    continue;
                 }
-            }
-
-            // update ant state
-            if (!ant->holdingFood && foodGrid.read(ant->pos.x, ant->pos.y)) {
-                // we're on food now!
-                log_trace("Ant id %lu in colony %d just found food at %d,%d", ant->id,
-                          colony->id, ant->pos.x, ant->pos.y);
-                ant->holdingFood = true;
-                ant->ticksSinceLastUseful = 0;
-                // since the ant has reached food, invert its direction for heading back
-                ant->preferredDir.x *= -1;
-                ant->preferredDir.y *= -1;
-                // reset the positions the ant has visited for going home
-                ant->visitedPos.clear();
-
-                // remove food from the world
-#if USE_OMP
-#pragma omp critical
-#endif
-                foodGrid.write(ant->pos.x, ant->pos.y, false);
-            } else if (ant->holdingFood && ant->pos.distance(colony->pos) <= colonyReturnDist) {
-                // got our food and returned home (near enough to the colony)
-                log_trace("Ant id %lu in colony %d just returned home with food", ant->id,
-                          colony->id);
-                ant->holdingFood = false;
-                ant->ticksSinceLastUseful = 0;
-                ant->visitedPos.clear();
-
-                // boost the colony
-#if USE_OMP
-#pragma omp critical
-#endif
-                colonyAddAnts.emplace_back(colony);
-            } // end update ant state
-
-            // update ticks since last useful for the ant
-            if (!ant->holdingFood) {
-                ant->ticksSinceLastUseful++;
-            }
-            // possibly kill this ant if its time has expired (+ some noise, to give it a little extra shot
-            // at life)
-            if (ant->ticksSinceLastUseful > antKillNotUseful + antKillNoise(rng)) {
-                log_trace("Ant id %lu in colony %d has died at %d,%d", ant->id, colony->id,
-                          ant->pos.x, ant->pos.y);
-                ant->isDead = true;
-            }
-        }// end each ant in colony loop
-    }
+                // update the ant
+                if (updateAnt(ant, colony, localRng)) {
+                    // record that we should add more ants to this colony
+                    colonyAddAnts[c] = true;
+                }
+            } // end each ant in colony loop
+        } // end each colony loop
+    } // end OMP block
 }
 
 bool World::updateMpiMaster() {
@@ -662,14 +600,15 @@ bool World::updateMpiMaster() {
     }
     // these are the colonies that we, the master, should work on
     int colonyWorkIdx[mpiColoniesPerWorker];
-    log_trace("Before MPI_Scatterv master");
     MPI_Scatter(colonyIdx, mpiColoniesPerWorker, MPI_INT,
                 colonyWorkIdx, mpiColoniesPerWorker, MPI_INT, 0, MPI_COMM_WORLD);
     MPI_Barrier(MPI_COMM_WORLD);
     log_trace("Sent scattered colonies");
 
     // do the work the master is required to do
-    updateColoniesMpi(colonyWorkIdx, seed);
+    bool colonyAddAnts[mpiColoniesPerWorker];
+    memset(colonyAddAnts, 0, mpiColoniesPerWorker * sizeof(bool));
+    updateColoniesMpi(colonyWorkIdx, colonyAddAnts, seed);
     MPI_Barrier(MPI_COMM_WORLD);
 
     return false;
@@ -709,7 +648,7 @@ bool World::updateMpiWorker() {
     log_trace("Received pheromoneGrid buf, hash: 0x%X",
               crc32(buf, pheromoneGrid.width * pheromoneGrid.height * pheromoneGrid.depth * 2 * sizeof(double)));
     delete[] buf;
-
+    // this will sync the dirty and clean arrays so they're equal
     foodGrid.commit();
     obstacleGrid.commit();
     pheromoneGrid.commit();
@@ -720,21 +659,27 @@ bool World::updateMpiWorker() {
     // receive the scattered colonies from the master. these will be the indices of the colonies we
     // are supposed to process
     int colonyWorkIdx[mpiColoniesPerWorker];
-    log_trace("Before MPI_Scatter worker");
     MPI_Scatter(nullptr, 0, MPI_INT, colonyWorkIdx,
                 mpiColoniesPerWorker, MPI_INT, 0, MPI_COMM_WORLD);
     MPI_Barrier(MPI_COMM_WORLD);
     log_trace("Received scattered colonies");
 
     // time to process them!!
-    updateColoniesMpi(colonyWorkIdx, seed);
+    bool colonyAddAnts[mpiColoniesPerWorker];
+    memset(colonyAddAnts, 0, mpiColoniesPerWorker * sizeof(bool));
+    updateColoniesMpi(colonyWorkIdx, colonyAddAnts, seed);
     MPI_Barrier(MPI_COMM_WORLD);
 
-    // TODO send master back all the data
+    // TODO send master back all the data: snapgrids, which indices in snapgrids we wrote to,
+    //  vector of colonies we worked on
 
     return false;
 }
 #endif
+
+
+
+// util functions
 
 static std::string generateFileName(const std::string &prefix) {
     // get the current date https://stackoverflow.com/a/16358111/5007892
@@ -800,15 +745,6 @@ void World::finaliseRecording() {
 }
 
 double World::pheromoneToColour(int32_t x, int32_t y) const {
-    // average over all the colonies of whichever is higher, to food or to colony
-//#define FACTOR 3.0
-//    double sum = 0.0;
-//    double count = 0.0;
-//    for (const auto &item : values) {
-//        sum += std::max(item.toFood, item.toColony);
-//        count += 1.0;
-//    }
-//    return std::clamp((sum / count) * FACTOR, 0.0, 1.0);
     // max over all the colonies of whichever is higher, to food or to colony
     double bestStrength = -9999.0;
     for (int c = 0; c < static_cast<int>(colonies.size()); c++) {

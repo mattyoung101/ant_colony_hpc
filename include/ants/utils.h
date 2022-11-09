@@ -6,6 +6,7 @@
 #include <string>
 #include <ostream>
 #include <cmath>
+#include "cereal/cereal.hpp"
 
 /// Divide to convert bytes to MiB
 #define BYTES2MIB 1048576
@@ -72,6 +73,13 @@ namespace ants {
             auto newB = static_cast<uint8_t>(std::round(static_cast<double>(b) * x));
             return {newR, newG, newB};
         }
+
+        // for cereal
+        friend class cereal::access;
+        template<class Archive>
+        void serialize(Archive & archive) {
+            archive(CEREAL_NVP(r), CEREAL_NVP(g), CEREAL_NVP(b));
+        }
     };
 
     /// 2D vector (integer)
@@ -121,18 +129,11 @@ namespace ants {
             return {x - other.x, y - other.y};
         }
 
-        /// Normalises this vector and returns a new vector
-        [[nodiscard]] Vector2i norm() const {
-            // instead of Euclidean distance, take the Chebyshev distance as the norm since we are
-            // on a grid
-            // this is absolutely critical to making it work!!! for some reason
-            auto len = static_cast<double>(std::max(std::abs(x), std::abs(y)));
-            if (len != 0) {
-                auto x2 = x / static_cast<int>(round(len));
-                auto y2 = y / static_cast<int>(round(len));
-                return {x2, y2};
-            }
-            return {0, 0}; // hack, stupid, should fix
+        // for cereal
+        friend class cereal::access;
+        template<class Archive>
+        void serialize(Archive & archive) {
+            archive(CEREAL_NVP(x), CEREAL_NVP(y));
         }
     };
 

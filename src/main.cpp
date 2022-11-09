@@ -47,11 +47,11 @@ int main(int argc, char *argv[]) {
 #pragma omp parallel default(none)
     {
 #pragma omp master
-        log_info("OpenMP will use %d thread(s)", omp_get_num_threads());
+        log_info("Using OpenMP ant update with %d thread(s)", omp_get_num_threads());
     }
 #endif
 #if USE_MPI
-    log_info("Using MPI ant update");
+    log_info("Using MPI colony dispatch");
     MPI_Init(&argc, &argv);
 #else
     log_info("Using serial ant update");

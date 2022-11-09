@@ -3,6 +3,8 @@
 #pragma once
 #include "ants/utils.h"
 #include <set>
+#include "cereal/types/vector.hpp"
+#include "cereal/types/set.hpp"
 
 namespace ants {
     struct Ant {
@@ -28,6 +30,15 @@ namespace ants {
 
         bool operator!=(const Ant &rhs) const {
             return !(rhs == *this);
+        }
+
+        // for cereal
+        friend class cereal::access;
+        template<class Archive>
+        void serialize(Archive & archive) {
+            archive(CEREAL_NVP(pos), CEREAL_NVP(holdingFood), CEREAL_NVP(preferredDir),
+                    CEREAL_NVP(ticksSinceLastUseful), CEREAL_NVP(visitedPos), CEREAL_NVP(id),
+                    CEREAL_NVP(isDead));
         }
     };
 }

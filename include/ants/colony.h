@@ -27,5 +27,13 @@ namespace ants {
         bool operator!=(const Colony &rhs) const {
             return !(rhs == *this);
         }
+
+        // for cereal
+        friend class cereal::access;
+        template<class Archive>
+        void serialize(Archive & archive) {
+            archive(CEREAL_NVP(hunger), CEREAL_NVP(colour), CEREAL_NVP(pos), CEREAL_NVP(ants),
+                    CEREAL_NVP(id), CEREAL_NVP(isDead));
+        }
     };
 };

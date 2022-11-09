@@ -86,13 +86,23 @@ namespace ants {
          */
         [[nodiscard]] std::pair<Vector2i, double> computePheromoneVector(const Colony &colony, const Ant &ant) const;
 
+        /**
+         * Updates a single ant in the world
+         * @param ant ant to update
+         * @param colony pointer to colony being updated
+         * @param localRng local pcg32 instance
+         * @returns true if the colony should add more ants, false otherwise
+         */
+        bool updateAnt(Ant *ant, Colony *colony, pcg32_fast &localRng);
+
 #if USE_MPI
         /**
          * Updates the selected colonies and their ants, for use in MPI
          * @param colonyWorkIdx indices of colonies to update, array of length mpiColoniesPerWorker
+         * @param colonyAddAnts for each ant in colonyWorkIdx, true if it needs more ants added to it
          * @param seed seed to initialise pcg32_fast rng with
          */
-        void updateColoniesMpi(int *colonyWorkIdx, uint64_t seed);
+        void updateColoniesMpi(int *colonyWorkIdx, bool *colonyAddAnts, uint64_t seed);
 #endif
 
         /// Renders a pheromone to a colour value. Returns the colour value between 0.0 and 1.0.
