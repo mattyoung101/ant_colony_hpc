@@ -5,9 +5,10 @@ import tarfile
 
 FILES = {
     # Impact of ant count on performance graph (each using same CPU on getafix, smp-7-whatever)
-    # "Release Serial": "../results/results_omp_final/SERIAL_goodcpu_ants_02-11-2022_00-08-20.tar",
-    # "Release OpenMP (16 threads)": "../results/results_omp_final/OMP16_goodcpu_ants_02-11-2022_00-10-43.tar",
-    # "Release OpenMP (32 threads)": "../results/results_omp_final/OMP32_goodcpu_ants_02-11-2022_00-10-11.tar",
+    "Release Serial": "../results/results_omp_final/SERIAL_goodcpu_ants_02-11-2022_00-08-20.tar",
+    "Release OpenMP (16 threads)": "../results/results_omp_final/OMP16_goodcpu_ants_02-11-2022_00-10-43.tar",
+    "Release OpenMP (24 threads)": "../results/results_omp_final/OMP24_goodcpu_ants_09-11-2022_15-54-37.tar",
+    "Release OpenMP (32 threads)": "../results/results_omp_final/OMP32_goodcpu_ants_02-11-2022_00-10-11.tar",
 
     # Comparing paralleling the ant update loop vs. parallelising the colony update loop
     # "Parallel colony update": "../results/results_omp_final/OMP32_goodcpu_ants_02-11-2022_00-10-11.tar",

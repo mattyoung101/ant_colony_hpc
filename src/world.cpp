@@ -497,13 +497,6 @@ bool World::update() {
         shouldContinue = false;
     }
     return shouldContinue;
-
-    // CEREAL TEST
-//    std::stringstream ss;
-//    cereal::BinaryOutputArchive ar(ss);
-//    ar(cereal::make_nvp("data", colonies));
-//    std::ofstream file("file.bin");
-//    file << ss.str();
 }
 
 #if USE_MPI
@@ -516,6 +509,7 @@ bool World::updateMpi() {
 }
 
 void World::updateColoniesMpi(int *colonyWorkIdx, bool *colonyAddAnts, uint64_t seed) {
+    log_trace("Starting updateColoniesMpi");
     // update the ants
 #if USE_OMP
 #pragma omp parallel default(none) shared(colonyWorkIdx, seed, colonyAddAnts)
@@ -532,6 +526,7 @@ void World::updateColoniesMpi(int *colonyWorkIdx, bool *colonyAddAnts, uint64_t 
 #pragma omp for
 #endif
         for (int c = 0; c < mpiColoniesPerWorker; c++) {
+            log_trace("Processing colony index %d (id %d)", c, colonyWorkIdx[c]);
             auto colony = &colonies[colonyWorkIdx[c]];
             // skip dead colonies
             if (colony->isDead) {
@@ -552,6 +547,7 @@ void World::updateColoniesMpi(int *colonyWorkIdx, bool *colonyAddAnts, uint64_t 
             } // end each ant in colony loop
         } // end each colony loop
     } // end OMP block
+    log_trace("Finished updateColoniesMpi");
 }
 
 bool World::updateMpiMaster() {
@@ -571,7 +567,8 @@ bool World::updateMpiMaster() {
     // the pheromone grid is harder since MPI can't send classes. what we will do instead is serialise
     // it manually using an array of doubles. we will store it like [toColony, toFood, toColony, toFood, ...]
     int bufSize = pheromoneGrid.width * pheromoneGrid.height * pheromoneGrid.depth * 2;
-    auto *buf = new double[bufSize]{};
+    // use a unique ptr which will be automatically cleaned up when this function returns
+    auto buf = std::make_unique<double[]>(bufSize);
     int bufIdx = 0;
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
@@ -583,14 +580,13 @@ bool World::updateMpiMaster() {
         }
     }
     // transmit the serialised array
-    MPI_Bcast(buf, bufSize, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    MPI_Bcast(buf.get(), bufSize, MPI_DOUBLE, 0, MPI_COMM_WORLD);
     MPI_Barrier(MPI_COMM_WORLD);
 
     log_trace("Sent SnapGrids to workers");
     log_trace("Sent foodGrid dirty hash 0x%X, clean hash 0x%X", foodGrid.crc32Dirty(), foodGrid.crc32Clean());
     log_trace("Sent pheromoneGrid buf, hash: 0x%X",
-              crc32(buf, pheromoneGrid.width * pheromoneGrid.height * pheromoneGrid.depth * 2 * sizeof(double)));
-    delete[] buf;
+              crc32(buf.get(), pheromoneGrid.width * pheromoneGrid.height * pheromoneGrid.depth * 2 * sizeof(double)));
 
     // scatter colonies to all workers (this includes ourselves, the master!)
     // we can't broadcast colonies directly, so broadcast colony indices
@@ -610,6 +606,45 @@ bool World::updateMpiMaster() {
     memset(colonyAddAnts, 0, mpiColoniesPerWorker * sizeof(bool));
     updateColoniesMpi(colonyWorkIdx, colonyAddAnts, seed);
     MPI_Barrier(MPI_COMM_WORLD);
+
+    // now, receive updated colonies from workers
+    // start from the first worker (we don't want to receive from the master!!)
+    for (int i = 1; i < mpiWorldSize; i++) {
+        log_trace("Attempting to receive from worker %d", i);
+        // figure out how large the message they are trying to send is
+        MPI_Status status{};
+        MPI_Probe(i, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+        int size = 0;
+        // note that MPI_Get_count returns the size **in bytes!!!!!**
+        MPI_Get_count(&status, MPI_UINT8_T, &size);
+        log_trace("Going to receive %d bytes from worker %d", size, i);
+
+        // receive the message. 16 bytes of extra padding just in case.
+        auto recvbuf = std::make_unique<uint8_t[]>(size + 16);
+        // NOLINTNEXTLINE: because unsigned char == uint8_t
+        MPI_Recv(recvbuf.get(), size, MPI_UINT8_T, i, 0, MPI_COMM_WORLD, &status);
+        log_trace("Received OK");
+
+        // deserialise it
+        std::stringstream ss;
+        // this is the best way I can think of to shove the byte array into the stringstream
+        for (int j = 0; j < size; j++) {
+            ss << recvbuf[j];
+        }
+        std::vector<Colony> receivedColonies{};
+        {
+            cereal::BinaryInputArchive ar(ss);
+            ar(receivedColonies);
+            // once out of scope, cereal will flush the archive (I believe??)
+        }
+        // store each received colony in our (the master) colonies array
+        for (size_t j = 0; j < receivedColonies.size(); j++) {
+            colonies[j] = receivedColonies[j];
+        }
+    }
+    log_trace("Done receiving from workers");
+    MPI_Barrier(MPI_COMM_WORLD);
+    log_trace("Passed all barriers master");
 
     return false;
 }
@@ -632,8 +667,8 @@ bool World::updateMpiWorker() {
     // now we need to receive pheromoneGrid, as mentioned above it uses a serialisation format, so
     // we'll need to deserialise it
     int bufSize = pheromoneGrid.width * pheromoneGrid.height * pheromoneGrid.depth * 2;
-    auto *buf = new double[bufSize]{};
-    MPI_Bcast(buf, bufSize, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    auto buf = std::make_unique<double[]>(bufSize);
+    MPI_Bcast(buf.get(), bufSize, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
     int index = 0;
     for (int y = 0; y < height; y++) {
@@ -646,9 +681,9 @@ bool World::updateMpiWorker() {
         }
     }
     log_trace("Received pheromoneGrid buf, hash: 0x%X",
-              crc32(buf, pheromoneGrid.width * pheromoneGrid.height * pheromoneGrid.depth * 2 * sizeof(double)));
-    delete[] buf;
-    // this will sync the dirty and clean arrays so they're equal
+              crc32(buf.get(), pheromoneGrid.width * pheromoneGrid.height * pheromoneGrid.depth * 2 * sizeof(double)));
+
+    // this will sync the dirty and clean arrays, so that they're equal
     foodGrid.commit();
     obstacleGrid.commit();
     pheromoneGrid.commit();
@@ -669,6 +704,27 @@ bool World::updateMpiWorker() {
     memset(colonyAddAnts, 0, mpiColoniesPerWorker * sizeof(bool));
     updateColoniesMpi(colonyWorkIdx, colonyAddAnts, seed);
     MPI_Barrier(MPI_COMM_WORLD);
+
+    // send master back all the data we generated, so it can replicate our state
+    // start with the colony updates. gather a list of colonies we worked on
+    log_trace("Worker sending serialised worked on colonies back to master");
+    std::vector<Colony> coloniesWorkedOn{};
+    for (int i = 0; i < mpiColoniesPerWorker; i++) {
+        coloniesWorkedOn.emplace_back(colonies[colonyWorkIdx[i]]);
+    }
+    // serialise with Cereal
+    std::stringstream ss;
+    {
+        cereal::BinaryOutputArchive ar(ss);
+        ar(colonies);
+        // once out of scope, cereal will flush the stringstream
+    }
+    auto serstr = ss.str();
+    log_trace("Serialised %zu bytes, sending to master", serstr.size());
+    std::vector<uint8_t> tmp(serstr.begin(), serstr.end());
+    MPI_Send(&tmp[0], static_cast<int>(serstr.size()), MPI_UINT8_T, 0, 0, MPI_COMM_WORLD);
+    MPI_Barrier(MPI_COMM_WORLD);
+    log_trace("Passed all barriers on worker");
 
     // TODO send master back all the data: snapgrids, which indices in snapgrids we wrote to,
     //  vector of colonies we worked on

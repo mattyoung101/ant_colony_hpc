@@ -61,6 +61,7 @@ The following open source libraries are used:
 - [pcg-cpp](https://github.com/imneme/pcg-cpp): C++ implementation of the high-quality PCG RNG algorithm: Apache 2.0 licence
 - [tinycolormap](https://github.com/yuki-koyama/tinycolormap): Matplotlib colour maps in C++: MIT licence
 - [clip](https://github.com/dacap/clip): Clipboard library, used for development purposes only: MIT licence
+- [cereal](https://github.com/USCiLab/cereal): C++ binary serialisation/deserialisation, used for MPI communication: BSD 3-clause licence
 
 ## Licence
 Hopefully eventually MPL 2.0 once the course is done. For now, academic use at UQ only.

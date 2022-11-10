@@ -37,6 +37,7 @@ static void writeFunc(void *context, void *data, int size) {
     imageContext->world.writeToTar(imageContext->filename, static_cast<uint8_t *>(data), size);
 }
 
+// TODO intercept CTRL+C and write out the recording
 
 int main(int argc, char *argv[]) {
     log_set_level(LOG_TRACE);

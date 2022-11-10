@@ -15,6 +15,13 @@
 #include "ants/defines.h"
 
 namespace ants {
+    typedef enum {
+        /// This message contains the size in bytes of the Cereal serialised colonies list
+        TAG_COLONIES_SIZE = 0,
+        /// This message contains the Cereal serialised colonies list
+        TAG_COLONIES,
+    } MPIWorldTag_t;
+
     struct World {
         /// Instantiates a world from the given PNG file as per specifications
         explicit World(const std::string &filename, mINI::INIStructure config);
