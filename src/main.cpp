@@ -54,7 +54,8 @@ int main(int argc, char *argv[]) {
 #if USE_MPI
     log_info("Using MPI colony dispatch");
     MPI_Init(&argc, &argv);
-#else
+#endif
+#if !USE_OMP && !USE_MPI
     log_info("Using serial ant update");
 #endif
     // load config file from disk
