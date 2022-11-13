@@ -1,0 +1,50 @@
+This is required pseudocode for the ant update
+
+function updateAnt(ant) is
+    let newX = ant.x, newY = ant.y
+    let pheromoneStrength, pheromoneVector = computePheromoneVector(ant)
+
+    if pheromoneStrength >= antUsePheromoneThreshold
+        // pheromone strength is high enough, use it
+        let movement = phVector
+    else
+        // pheromone strength is too low, move randomly
+        let movement = randomMovementVector()
+
+    newX, newY += movement
+
+    if (ant not in bounds or ant intersects obstacle or (ant holding food and ant on food))
+        // reached an obstacle, flip the preferred dir
+        ant.preferredDir *= -1
+    else
+        // checks passed so update ant data
+        ant.pos = newX, newY
+        // record where the ant walked, so it doesn't go back and forth
+        insert movement into ant.visitedPos
+
+    if ant holding food:
+        // holding food, add to the "to food" strength, so we let other ants know where we
+        // found food
+        increment pheromoneGrid(x,y) for ant colony and state "to food"
+    else:
+        // looking for food, update the "to colony" strength, so other ants know how to get home
+        increment pheromoneGrid(x,y) for ant colony and state "to colony"
+
+    // update ant state
+    if ant holding food:
+        ant.holdingFood = true
+        clear ant.visitedPos
+        ant.preferredDir *= -1
+        ant.ticksSinceLastUseful = 0
+    else if ant is holding food and ant is close enough to its home colony:
+        clear ant.visitedPos
+        ant.preferredDir *= -1
+        ant.ticksSinceLastUseful = 0
+        mark ant colony for adding more ants/boosting (after loop)
+
+    if ant is not holding food:
+        ant.ticksSinceLastUseful++
+
+    // kill the ant if it has not been useful in a while
+    if ant.ticksSinceLastUseful >= antKillNotUseful:
+        ant.isDead = true

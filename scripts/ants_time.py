@@ -15,7 +15,7 @@ FILES = {
     # "Parallel ant update": "../results/results_omp_final/OMP32_goodcpu_antsparallel_ants_05-11-2022_23-47-56.tar"
 
     # this one is for my  PC
-    # "Release OpenMP (32 threads) (Ryzen 9 5950X)": "../results/results_omp_final/OMP32_Ryzen_ants_01-11-2022_06-20-14.tar"
+    # "Release Serial (Ryzen 9 5950X)": "../results/results_serial_final/SERIAL_ryzen_ants_13-11-2022_15-09-52.tar"
 }
 
 if __name__ == "__main__":
@@ -30,7 +30,7 @@ if __name__ == "__main__":
 
     ax.set_ylabel("Average iteration time (milliseconds)")
     ax.set_xlabel("Number of ants")
-    ax.set_title("Impact of ant count on performance (getafix, megamap)")
+    ax.set_title("Impact of ant count on performance (personal workstation, megamap)")
     ax.legend()
     ax.grid()
     plt.show()

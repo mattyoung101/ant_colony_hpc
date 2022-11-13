@@ -32,16 +32,17 @@ struct ImageContext {
 // for stbi_write
 // the context pointer is the world instance
 static void writeFunc(void *context, void *data, int size) {
-    auto imageContext = static_cast<ImageContext *>(context);
-    //log_trace("Writing %d bytes to file in TAR %s", size, imageContext->filename.c_str());
+    auto imageContext = static_cast<ImageContext*>(context);
     imageContext->world.writeToTar(imageContext->filename, static_cast<uint8_t *>(data), size);
 }
 
 // TODO intercept CTRL+C and write out the recording
 
 int main(int argc, char *argv[]) {
-    log_set_level(LOG_TRACE);
+    log_set_level(LOG_DEBUG);
     log_info("COSC3500 Ant Simulator - Matt Young, 2022");
+
+    // ugly preprocessor macros begin here - sorry
 
     // initialise OpenMP
 #if USE_OMP
@@ -52,7 +53,7 @@ int main(int argc, char *argv[]) {
     }
 #endif
 #if USE_MPI
-    log_info("Using MPI colony dispatch");
+    log_info("Using MPI ant update. Number of workers will be determined shortly.");
     MPI_Init(&argc, &argv);
 #endif
 #if !USE_OMP && !USE_MPI
@@ -188,6 +189,7 @@ int main(int argc, char *argv[]) {
     log_info("Time spent in non-simulator tasks: %.3f ms (%.3f%%)", nonSim, (nonSim / wallTimeMs) * 100.0);
 
 #if USE_MPI
+    // quick way to
     }
 
     MPI_Finalize();

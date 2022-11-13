@@ -38,19 +38,18 @@ Acts as a replacement for OpenMP. Here's what we'll do:
 
 ```
 // main.cpp
-Master/Worker: Run init code (it's deterministic, so should be OK). All workers now have same state.
+Master/Worker: Run init code. All workers now have same state.
 
 // World::update
 Master (Rank 0): Broadcast the clean buffer for each SnapGrid to all workers.
 Worker (Rank N): Receive the clean buffer and copy into the diry buffer (reduces bandwidth required).
-Master (Rank 0): Scatter colonies to workers (each worker gets 1 colony)
+Master (Rank 0): Scatter colonies to workers
 
 For each colony:
     Worker (Rank N) including master: 
-        #pragma omp parallel for (if USE_OMP is enabled)
         For each ant we have to process:
             Process the ant.
-        Send master indices of colonies that need ants to be added to them.
+        Send master an updated vector of the colony states we worked on.
         Send master updated SnapGrids and which tiles were written.
     Master: Receive data from all workers.
     

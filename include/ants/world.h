@@ -16,11 +16,17 @@
 
 namespace ants {
     typedef enum {
-        /// This message contains the size in bytes of the Cereal serialised colonies list
-        TAG_COLONIES_SIZE = 0,
-        /// This message contains the Cereal serialised colonies list
-        TAG_COLONIES,
-    } MPIWorldTag_t;
+        /// Tag to indicate this message is food grid data
+        TAG_FOOD_DATA = 0,
+        /// Tag to indicate this message is food grid written or not table
+        TAG_FOOD_WRITTEN,
+        /// Tag to indicate this message is pheromone grid data
+        TAG_PHEROMONES_DATA,
+        /// Tag to indicate this message is pheromone grid written or not table
+        TAG_PHEROMONES_WRITTEN,
+        /// Tag to receive colony add ants
+        TAG_COLONY_ADD_ANTS,
+    } MPITag_t;
 
     struct World {
         /// Instantiates a world from the given PNG file as per specifications
@@ -106,10 +112,21 @@ namespace ants {
         /**
          * Updates the selected colonies and their ants, for use in MPI
          * @param colonyWorkIdx indices of colonies to update, array of length mpiColoniesPerWorker
-         * @param colonyAddAnts for each ant in colonyWorkIdx, true if it needs more ants added to it
+         * @param colonyAddAnts for each ant in colonyWorkIdx, -1 if we should not add more ants, otherwise
+         * the colony index (we should add more ants)
          * @param seed seed to initialise pcg32_fast rng with
          */
-        void updateColoniesMpi(int *colonyWorkIdx, bool *colonyAddAnts, uint64_t seed);
+        void updateColoniesMpi(int *colonyWorkIdx, int *colonyAddAnts, uint64_t seed);
+
+        /**
+         * Packs the pheromone grid into a continuous data structure suitable for transmitting using
+         * MPI
+         * @return unique_ptr to allocated region of doubles
+         */
+        std::unique_ptr<double[]> packPheromoneGrid();
+
+        /// Unpacks a packed pheromone grid into the pheromone grid of this class
+        void unpackPheromoneGrid(const std::shared_ptr<double[]>& packedData);
 #endif
 
         /// Renders a pheromone to a colour value. Returns the colour value between 0.0 and 1.0.
