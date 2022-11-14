@@ -3,7 +3,6 @@
 # If repeating this script multiple times, more care should be taken (in regards to CMake in particular).
 module load gnu/10.2.1
 module load cmake/3.9.1
-module load cuda
 
 mkdir cmake-build-release-getafix
 cd cmake-build-release-getafix
