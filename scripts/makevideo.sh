@@ -21,7 +21,7 @@ echo "Processing"
 #  -c:v libx265 -crf 20 -b:v 0 ants.mp4
 
 # use vp9
-ffmpeg -y -framerate 40 -i "$TMPDIR/%d.png" -vf scale=960:540:flags=neighbor \
+ffmpeg -y -framerate 40 -i "$TMPDIR/%d.png" -vf scale=1024:1024:flags=neighbor \
   -c:v libvpx-vp9 -crf 20 -b:v 0 -deadline good -cpu-used 1 -row-mt 1 -threads 0 ants.webm
 
 echo "Cleaning up"

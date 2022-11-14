@@ -5,3 +5,6 @@ callgrind.out.1076540 is profiled against the code where I split World::update f
 
 callgrind.out.966881 is profiled against the 32-thread OpenMP version on my PC, with World::updateAnt()
 existing
+
+callgrind.out.1246534 is profiled against a 4-worker MPI. Probably not very good data, I wouldn't
+really use it if I were you.
