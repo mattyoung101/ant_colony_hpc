@@ -16,6 +16,12 @@ FILES = {
 
     # this one is for my  PC
     # "Release Serial (Ryzen 9 5950X)": "../results/results_serial_final/SERIAL_ryzen_ants_13-11-2022_15-09-52.tar"
+
+    # MPI
+    # "Release Serial": "../results/results_mpi_final/MPI_serialcomparison_ants_ants_14-11-2022_01-53-04.tar",
+    # "Release OpenMP (20 threads)": "../results/results_mpi_final/MPI_ompcomparison_20threads_ants_14-11-2022_02-02-35.tar",
+    # "Release MPI (20 workers, 5 workers per node)": "../results/results_mpi_final/MPI_20_5_ants_ants_14-11-2022_01-51-00.tar",
+    # "Release MPI (20 workers, 10 workers per node)": "../results/results_mpi_final/MPI_20_10_ants_ants_14-11-2022_01-51-40.tar",
 }
 
 if __name__ == "__main__":
@@ -30,7 +36,9 @@ if __name__ == "__main__":
 
     ax.set_ylabel("Average iteration time (milliseconds)")
     ax.set_xlabel("Number of ants")
-    ax.set_title("Impact of ant count on performance (personal workstation, megamap)")
+    ax.set_title("Impact of ant count on performance (getafix, megamap)")
+    # ax.set_title("Impact of ant count on performance (personal workstation, megamap)")
+    # ax.set_title("Impact of ant count on performance (getafix, megamap_mpi)")
     ax.legend()
     ax.grid()
     plt.show()
