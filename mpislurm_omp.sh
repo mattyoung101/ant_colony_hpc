@@ -9,8 +9,6 @@
 #SBATCH --time=0-480:00
 #SBATCH -e log_%j.err
 #SBATCH -o log_%j.out
-#SBATCH --mail-user=SodiumSandwich@outlook.com
-#SBATCH --mail-type=ALL
 
 # Slurm job to compare the OpenMP version against the MPI version of the colony
 

@@ -1,5 +1,8 @@
-// World class header. Most of the simulator code is in world.cpp/world.h.
-// Matt Young, 2022
+// Copyright (c) 2022 Matt Young. All rights reserved.
+//
+// This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+// If a copy of the MPL was not distributed with this file, You can obtain one at
+// http://mozilla.org/MPL/2.0/.
 #pragma once
 #include <cstdint>
 #include <array>
@@ -13,6 +16,8 @@
 #include "pcg/pcg_random.hpp"
 #include "ants/snapgrid.h"
 #include "ants/defines.h"
+
+// World class header. Most of the simulator code is in world.cpp/world.h.
 
 namespace ants {
     typedef enum {

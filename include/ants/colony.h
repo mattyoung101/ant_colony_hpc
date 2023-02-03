@@ -1,9 +1,14 @@
-// Record of a colony in the simulation. Stores info about colony data.
-// Matt Young, 2022
+// Copyright (c) 2022 Matt Young. All rights reserved.
+//
+// This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+// If a copy of the MPL was not distributed with this file, You can obtain one at
+// http://mozilla.org/MPL/2.0/
 #pragma once
 #include <cstdint>
 #include "ants/utils.h"
 #include "ant.h"
+
+// Record of a colony in the simulation. Stores info about colony data.
 
 namespace ants {
     struct Colony {

@@ -9,8 +9,6 @@
 #SBATCH --time=0-480:00
 #SBATCH -e log_%j.err
 #SBATCH -o log_%j.out
-#SBATCH --mail-user=SodiumSandwich@outlook.com
-#SBATCH --mail-type=ALL
 # force running on a particular cluster (the Xeon Gold ones) for reproducibility
 #SBATCH --constraint=R640
 

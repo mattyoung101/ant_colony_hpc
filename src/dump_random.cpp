@@ -1,12 +1,17 @@
+// Copyright (c) 2022 Matt Young. All rights reserved.
+//
+// This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+// If a copy of the MPL was not distributed with this file, You can obtain one at
+// http://mozilla.org/MPL/2.0/.
+#include <random>
+#include "pcg/pcg_random.hpp"
+#include "log/log.h"
+
 // This file is used to dump a bunch of pcg32_fast numbers with a seed to a binary file that
 // can be loaded later.
 // Usage: ./dump_random <seed> <width> <height>
 // Will produce width * height numbers
-// This is used in World::decayPheromones to efficiently generate a huge amount of numbers
-// Matt Young, 2022
-#include <random>
-#include "pcg/pcg_random.hpp"
-#include "log/log.h"
+// This is used in World::decayPheromones to efficiently generate a huge amount of numbers.
 
 int main(int argc, char *argv[]) {
     log_set_level(LOG_TRACE);
